@@ -35,7 +35,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train MM-UNet on FIVEs dataset')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs')
+    parser.add_argument('--epochs', type=int, default=40, help='Number of epochs')
     parser.add_argument('--data_root', type=str, default='./fives_preprocessed', 
                         help='Path to FIVEs dataset')
     parser.add_argument('--image_size', type=int, default=1024, 
@@ -221,7 +221,23 @@ def test_one_epoch(
 
 
 def main():
-    args = parse_args()
+    # Hardcoded settings - no CLI bullshit
+    args = EasyDict({
+        'lr': 0.001,
+        'batch_size': 4,
+        'epochs': 100,
+        'data_root': './fives_preprocessed',
+        'image_size': 1024,
+        'num_workers': 4,
+        'test_ratio': 0.05,
+        'warmup': 5,
+        'weight_decay': 0.05,
+        'checkpoint_dir': './checkpoints_fives',
+        'resume': None,
+        'seed': 42,
+        'compute_norm': True,
+        'gpu': '0'
+    })
     
     # Set GPU
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -343,13 +359,12 @@ def main():
         monai.transforms.AsDiscrete(threshold=0.5)
     ])
     
-    # Optimizer
+    # Optimizer - simplified to avoid conflicts
     optimizer = optim_factory.create_optimizer_v2(
         model, 
         config.trainer.optimizer,
-        weight_decay=args.weight_decay,
-        lr=args.lr, 
-        betas=(0.9, 0.95)
+        args.lr,
+        weight_decay=args.weight_decay
     )
     
     # Scheduler
