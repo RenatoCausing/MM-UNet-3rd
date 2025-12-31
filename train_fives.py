@@ -348,7 +348,7 @@ def main():
         model, 
         opt=config.trainer.optimizer,
         weight_decay=args.weight_decay,
-        lr=args.lr, 
+        learning_rate=args.lr, 
         betas=(0.9, 0.95)
     )
     
