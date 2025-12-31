@@ -346,9 +346,9 @@ def main():
     # Optimizer
     optimizer = optim_factory.create_optimizer_v2(
         model, 
-        opt=config.trainer.optimizer,
+        config.trainer.optimizer,
         weight_decay=args.weight_decay,
-        learning_rate=args.lr, 
+        lr=args.lr, 
         betas=(0.9, 0.95)
     )
     
