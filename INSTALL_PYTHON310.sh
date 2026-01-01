@@ -76,6 +76,14 @@ pip install SimpleITK nibabel opencv-python openpyxl scikit-learn pandas matplot
 echo "Final PyTorch verification..."
 python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'; print(f'✓ PyTorch locked at {v}')"
 
+# 11b. Install missing dependencies (without upgrading PyTorch)
+echo "Installing missing dependencies..."
+pip install psutil addict rich termcolor yapf --no-deps
+pip install huggingface-hub regex safetensors tokenizers tqdm --no-deps
+
+# Verify PyTorch still locked
+python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'"
+
 # 12. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
 echo "Compiling CUSTOM Mamba from source (this will work with CUDA 11.8)..."
 
