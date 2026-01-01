@@ -28,6 +28,10 @@ pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https
 # Verify PyTorch
 python -c "import torch; print(f'✓ PyTorch {torch.__version__} CUDA {torch.version.cuda}')"
 
+# Install compatible versions BEFORE requirements.txt to prevent upgrades
+echo "Installing compatible package versions for PyTorch 2.0..."
+pip install transformers==4.30.2 mmengine==0.7.4 timm==0.4.12 accelerate==0.18.0 monai==1.1.0
+
 # Install all packages from requirements.txt
 pip install -r requirements/requirements.txt
 
