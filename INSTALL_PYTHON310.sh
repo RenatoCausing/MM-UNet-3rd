@@ -88,59 +88,21 @@ pip install SimpleITK nibabel opencv-python openpyxl scikit-learn pandas matplot
 echo "Final PyTorch verification..."
 python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'; print(f'✓ PyTorch locked at {v}')"
 
-# 14. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
-echo "Compiling CUSTOM Mamba from source (this will work with CUDA 11.8)..."
+# 14. Install standard mamba-ssm (pre-compiled wheel)
+echo "Installing standard mamba-ssm..."
+pip install mamba-ssm --no-deps
 
-# CRITICAL: Uninstall any existing mamba-ssm first
-echo "Removing any existing mamba-ssm installation..."
-pip uninstall -y mamba-ssm causal-conv1d 2>/dev/null || true
+# 15. Install causal-conv1d dependency
+pip install causal-conv1d --no-deps
 
-# Clear pip cache to prevent using old wheels
-echo "Clearing pip cache for mamba packages..."
-pip cache remove mamba-ssm 2>/dev/null || true
-pip cache remove causal-conv1d 2>/dev/null || true
-
-cd requirements/Mamba/causal-conv1d
-rm -rf build/ dist/ *.egg-info 2>/dev/null || true
-pip install . --no-build-isolation --force-reinstall --no-cache-dir 2>&1 | tee /tmp/causal_install.log
-CAUSAL_STATUS=$?
-cd ../../..
-
-cd requirements/Mamba/mamba
-rm -rf build/ dist/ *.egg-info 2>/dev/null || true
-pip install . --no-build-isolation --force-reinstall --no-cache-dir 2>&1 | tee /tmp/mamba_install.log
-MAMBA_STATUS=$?
-cd ../../..
-
-# 13. Verify custom Mamba has bimamba_type and nslices parameters (CRITICAL!)
-echo "Verifying custom Mamba parameters..."
-python -c "
-from mamba_ssm import Mamba
-import inspect
-sig = str(inspect.signature(Mamba.__init__))
-if 'bimamba_type' not in sig or 'nslices' not in sig:
-    print('ERROR: Custom Mamba missing required parameters!')
-    print('Expected: bimamba_type and nslices')
-    print('Got signature:', sig)
-    print('This means the standard mamba-ssm was installed instead of the custom fork.')
-    exit(1)
-print('✓ Custom Mamba with bimamba_type and nslices verified!')
-print('Signature includes:', [p for p in sig.split(',') if 'bimamba' in p or 'nslices' in p])
-"
-if [ $? -ne 0 ]; then
-  echo "ERROR: Custom Mamba verification failed!"
-  echo "Check logs: /tmp/causal_install.log and /tmp/mamba_install.log"
-  exit 1
-fi
-
-# 15. FINAL NumPy check - force 1.24.3 one last time
+# 16. FINAL NumPy check - force 1.24.3 one last time
 echo "Final NumPy version lock..."
 pip install numpy==1.24.3 --force-reinstall --no-deps
 
-# 16. Final PyTorch check before dataset download
+# 17. Final PyTorch check before dataset download
 python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}!'; print(f'✓ Final check: PyTorch {v}')"
 
-# 17. Download dataset
+# 18. Download dataset
 echo "Downloading FIVEs dataset..."
 gdown --id 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p
 unzip fives_preprocessed.zip
