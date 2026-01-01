@@ -75,12 +75,12 @@ pip install numpy==1.24.3 --force-reinstall --no-deps
 # 10. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
 echo "Compiling CUSTOM Mamba from source (this will work with CUDA 11.8)..."
 cd requirements/Mamba/causal-conv1d
-pip install -e . --no-build-isolation 2>&1 | tee /tmp/causal_install.log
+pip install . --no-build-isolation 2>&1 | tee /tmp/causal_install.log
 CAUSAL_STATUS=$?
 cd ../../..
 
 cd requirements/Mamba/mamba
-pip install -e . --no-build-isolation 2>&1 | tee /tmp/mamba_install.log
+pip install . --no-build-isolation 2>&1 | tee /tmp/mamba_install.log
 MAMBA_STATUS=$?
 cd ../../..
 
