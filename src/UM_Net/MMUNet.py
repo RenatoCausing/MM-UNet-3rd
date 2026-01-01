@@ -170,12 +170,12 @@ class MMConv(nn.Module):
 
         y_new_ = y_new_.add(y_offset_new_.mul(extend_scope))
 
-        # Mamba
+        # Mamba - standard mamba-ssm returns only hidden_states
         _, _, width, height = y_keep.shape
         y_keep = self.two_row_columnwise_flatten_grad_safe(y_keep)
 
         y_keep = y_keep.transpose(-1, -2)
-        y_keep, _, _, _ = self.mamba(y_keep)
+        y_keep = self.mamba(y_keep)  # Standard Mamba returns only one value
         y_keep = y_keep.transpose(-1, -2)
         y_keep = self.inverse_two_row_columnwise_flatten(y_keep, width, height)
         
@@ -398,7 +398,7 @@ class RCG(nn.Module):
         
         x_flat = x0.reshape(B, C, n_tokens).transpose(-1, -2)
         
-        out, q, k, v = self.mamba(x_flat)
+        out = self.mamba(x_flat)  # Standard Mamba returns only hidden_states
         
         out_m = out.transpose(-1, -2).reshape(B, C, *img_dims)
         
