@@ -63,7 +63,8 @@ pip install numpy==1.24.3 --no-deps --force-reinstall
 
 # 10. Install ALL small dependencies FIRST with --no-deps to prevent PyTorch upgrade
 echo "Installing all small dependencies (blocking PyTorch upgrade)..."
-pip install psutil addict rich termcolor yapf --no-deps
+pip install psutil addict termcolor yapf pygments --no-deps
+pip install rich --no-deps
 pip install huggingface-hub==0.15.1 regex safetensors==0.3.1 tokenizers==0.13.3 tqdm --no-deps
 pip install httpx fsspec filelock --no-deps
 pip install einops ninja packaging --no-deps
