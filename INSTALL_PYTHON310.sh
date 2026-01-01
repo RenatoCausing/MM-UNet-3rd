@@ -49,30 +49,34 @@ pip install --upgrade pip
 echo "Installing build dependencies..."
 pip install wheel setuptools packaging ninja
 
-# 7. Install exact PyTorch with CUDA 11.8
-echo "Installing PyTorch 2.0.0 with CUDA 11.8..."
-pip install torch==2.0.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# 7. Install exact PyTorch with CUDA 11.8 - FORCE and LOCK
+echo "Installing PyTorch 2.0.0 with CUDA 11.8 (LOCKED)..."
+pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu118 --force-reinstall --no-cache-dir
 
-# 7. Install NumPy FIRST with no dependencies to prevent upgrades
+# 8. Verify PyTorch version immediately
+echo "Verifying PyTorch installation..."
+python -c "import torch; v = torch.__version__; c = torch.version.cuda; assert v.startswith('2.0.0'), f'Wrong PyTorch {v}'; assert c == '11.8', f'Wrong CUDA {c}'; print(f'✓ PyTorch {v} CUDA {c}')"
+
+# 9. Install NumPy FIRST with no dependencies to prevent upgrades
 echo "Installing NumPy 1.24.3 (CRITICAL - blocks NumPy 2.x)..."
 pip install numpy==1.24.3 --no-deps --force-reinstall
 
-# 8. Install exact versions from original requirements
+# 10. Install exact versions from original requirements (all with --no-deps to prevent PyTorch upgrade)
 echo "Installing EXACT versions from original requirements..."
 pip install timm==0.4.12 --no-deps
 pip install objprint==0.2.3 --no-deps
-pip install accelerate==0.18.0
-pip install monai==1.1.0
-pip install mmengine==0.7.4
-pip install transformers==4.30.2
+pip install accelerate==0.18.0 --no-deps
+pip install monai==1.1.0 --no-deps
+pip install mmengine==0.7.4 --no-deps
+pip install transformers==4.30.2 --no-deps
 pip install tensorboard easydict pyyaml yacs
 pip install SimpleITK nibabel opencv-python openpyxl scikit-learn pandas matplotlib Pillow gdown
 
-# 9. Force NumPy back to 1.24.3 if anything upgraded it
-echo "Re-forcing NumPy 1.24.3..."
-pip install numpy==1.24.3 --force-reinstall --no-deps
+# 11. FINAL verification - PyTorch must still be 2.0.0
+echo "Final PyTorch verification..."
+python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'; print(f'✓ PyTorch locked at {v}')"
 
-# 10. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
+# 12. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
 echo "Compiling CUSTOM Mamba from source (this will work with CUDA 11.8)..."
 cd requirements/Mamba/causal-conv1d
 pip install . --no-build-isolation 2>&1 | tee /tmp/causal_install.log
@@ -84,7 +88,7 @@ pip install . --no-build-isolation 2>&1 | tee /tmp/mamba_install.log
 MAMBA_STATUS=$?
 cd ../../..
 
-# 11. Verify custom Mamba installation (MUST succeed)
+# 13. Verify custom Mamba installation (MUST succeed)
 echo "Verifying custom Mamba installation..."
 python -c "from mamba_ssm import Mamba; print('Custom Mamba successfully installed!')" 2>/dev/null
 if [ $? -ne 0 ]; then
@@ -93,11 +97,11 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# 12. FINAL NumPy check - force 1.24.3 one last time
+# 14. FINAL NumPy check - force 1.24.3 one last time
 echo "Final NumPy version lock..."
 pip install numpy==1.24.3 --force-reinstall --no-deps
 
-# 13. Download dataset
+# 15. Download dataset
 echo "Downloading FIVEs dataset..."
 gdown --id 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p
 unzip fives_preprocessed.zip
