@@ -34,7 +34,7 @@ warnings.filterwarnings('ignore')
 def parse_args():
     parser = argparse.ArgumentParser(description='Train MM-UNet on FIVEs dataset')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--batch_size', type=int, default=4, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=3, help='Batch size')
     parser.add_argument('--epochs', type=int, default=40, help='Number of epochs')
     parser.add_argument('--data_root', type=str, default='./fives_preprocessed', 
                         help='Path to FIVEs dataset')
