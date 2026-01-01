@@ -25,7 +25,11 @@ python --version
 # 5. Upgrade pip
 pip install --upgrade pip
 
-# 6. Install exact PyTorch with CUDA 11.8
+# 6. Install build dependencies
+echo "Installing build dependencies..."
+pip install wheel setuptools packaging ninja
+
+# 7. Install exact PyTorch with CUDA 11.8
 echo "Installing PyTorch 2.0.0 with CUDA 11.8..."
 pip install torch==2.0.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
@@ -55,7 +59,9 @@ echo "Checking Mamba installation..."
 python -c "import mamba_ssm; print('Mamba installed successfully')" 2>/dev/null
 if [ $? -ne 0 ]; then
   echo "Source compilation failed, installing prebuilt wheels..."
-  pip install causal-conv1d==1.1.1 mamba-ssm==1.1.1
+  # Use direct wheel URLs for cu118
+  pip install https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.1.1/causal_conv1d-1.1.1+cu118torch2.0cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+  pip install https://github.com/state-spaces/mamba/releases/download/v1.1.1/mamba_ssm-1.1.1+cu118torch2.0cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 fi
 
 # 11. Download dataset
