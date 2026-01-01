@@ -44,6 +44,7 @@ pip install objprint==0.2.3 --no-deps
 pip install accelerate==0.18.0
 pip install monai==1.1.0
 pip install mmengine==0.7.4
+pip install transformers==4.30.2
 pip install tensorboard easydict pyyaml yacs
 pip install SimpleITK nibabel opencv-python openpyxl scikit-learn pandas matplotlib Pillow gdown
 

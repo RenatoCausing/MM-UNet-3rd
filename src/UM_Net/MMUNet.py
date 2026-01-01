@@ -29,8 +29,6 @@ class MMConv(nn.Module):
                 d_state=16,  # SSM state expansion factor
                 d_conv=4,    # Local convolution width
                 expand=2,    # Block expansion factor
-                bimamba_type="v3",   # Changed from v1 to v3 to match assertion
-                nslices = num_slices
         )
 
         self.kernel_size = kernel_size
