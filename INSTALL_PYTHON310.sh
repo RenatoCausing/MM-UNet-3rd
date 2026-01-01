@@ -34,8 +34,24 @@ pip install -r requirements/requirements.txt
 # Verify PyTorch didn't upgrade
 python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'; print(f'✓ PyTorch still {v}')"
 
-# Install mamba-ssm and causal-conv1d
-pip install mamba-ssm causal-conv1d
+# Compile CUSTOM Mamba from source (with bimamba_type and nslices parameters)
+echo ""
+echo "Compiling custom Mamba from source..."
+cd requirements/Mamba/causal-conv1d
+pip install . --no-build-isolation
+cd ../mamba
+pip install . --no-build-isolation
+cd ../../..
+
+# Verify custom Mamba has the required parameters
+echo "Verifying custom Mamba..."
+python -c "
+from mamba_ssm import Mamba
+import inspect
+sig = str(inspect.signature(Mamba.__init__))
+assert 'bimamba_type' in sig and 'nslices' in sig, f'Missing custom parameters! Got: {sig}'
+print('✓ Custom Mamba with bimamba_type and nslices verified')
+"
 
 # Install additional packages for training
 pip install easydict gdown
