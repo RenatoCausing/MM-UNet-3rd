@@ -88,14 +88,19 @@ pip install numpy==1.24.3 --no-deps --force-reinstall
 echo ""
 echo "[5/6] Compiling CUSTOM Mamba (bimamba_type, nslices support)..."
 
+# CRITICAL: Set MAMBA_FORCE_BUILD to prevent downloading pre-built wheels
+# The setup.py has CachedWheelsCommand that downloads official wheels by default
+# We need to force building from our modified source code
+export MAMBA_FORCE_BUILD=TRUE
+
 # Compile causal-conv1d first
 cd requirements/Mamba/causal-conv1d
 pip install . --no-build-isolation --no-deps
 cd ../../..
 
-# Compile custom mamba
+# Compile custom mamba - MUST force build from source
 cd requirements/Mamba/mamba
-pip install . --no-build-isolation --no-deps
+MAMBA_FORCE_BUILD=TRUE pip install . --no-build-isolation --no-deps
 cd ../../..
 
 # Final numpy lock
