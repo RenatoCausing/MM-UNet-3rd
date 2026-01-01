@@ -221,23 +221,8 @@ def test_one_epoch(
 
 
 def main():
-    # Hardcoded settings - no CLI bullshit
-    args = EasyDict({
-        'lr': 0.001,
-        'batch_size': 4,
-        'epochs': 100,
-        'data_root': './fives_preprocessed',
-        'image_size': 1024,
-        'num_workers': 4,
-        'test_ratio': 0.05,
-        'warmup': 5,
-        'weight_decay': 0.05,
-        'checkpoint_dir': './checkpoints_fives',
-        'resume': None,
-        'seed': 42,
-        'compute_norm': True,
-        'gpu': '0'
-    })
+    # Parse command line arguments
+    args = parse_args()
     
     # Set GPU
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
