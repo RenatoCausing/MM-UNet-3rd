@@ -61,7 +61,17 @@ python -c "import torch; v = torch.__version__; c = torch.version.cuda; assert v
 echo "Installing NumPy 1.24.3 (CRITICAL - blocks NumPy 2.x)..."
 pip install numpy==1.24.3 --no-deps --force-reinstall
 
-# 10. Install exact versions from original requirements (all with --no-deps to prevent PyTorch upgrade)
+# 10. Install ALL small dependencies FIRST with --no-deps to prevent PyTorch upgrade
+echo "Installing all small dependencies (blocking PyTorch upgrade)..."
+pip install psutil addict rich termcolor yapf --no-deps
+pip install huggingface-hub==0.15.1 regex safetensors==0.3.1 tokenizers==0.13.3 tqdm --no-deps
+pip install httpx fsspec filelock --no-deps
+pip install einops ninja packaging --no-deps
+
+# Verify PyTorch still locked after dependencies
+python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'; print(f'✓ PyTorch still {v}')"
+
+# 11. Install exact versions from original requirements (all with --no-deps)
 echo "Installing EXACT versions from original requirements..."
 pip install timm==0.4.12 --no-deps
 pip install objprint==0.2.3 --no-deps
@@ -69,22 +79,16 @@ pip install accelerate==0.18.0 --no-deps
 pip install monai==1.1.0 --no-deps
 pip install mmengine==0.7.4 --no-deps
 pip install transformers==4.30.2 --no-deps
-pip install tensorboard easydict pyyaml yacs
-pip install SimpleITK nibabel opencv-python openpyxl scikit-learn pandas matplotlib Pillow gdown
 
-# 11. FINAL verification - PyTorch must still be 2.0.0
+# 12. Install remaining packages that don't upgrade PyTorch
+pip install tensorboard easydict pyyaml yacs --no-deps
+pip install SimpleITK nibabel opencv-python openpyxl scikit-learn pandas matplotlib Pillow gdown --no-deps
+
+# 13. FINAL verification - PyTorch must still be 2.0.0
 echo "Final PyTorch verification..."
 python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'; print(f'✓ PyTorch locked at {v}')"
 
-# 11b. Install missing dependencies (without upgrading PyTorch)
-echo "Installing missing dependencies..."
-pip install psutil addict rich termcolor yapf --no-deps
-pip install huggingface-hub regex safetensors tokenizers tqdm --no-deps
-
-# Verify PyTorch still locked
-python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'"
-
-# 12. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
+# 14. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
 echo "Compiling CUSTOM Mamba from source (this will work with CUDA 11.8)..."
 
 # CRITICAL: Uninstall any existing mamba-ssm first
@@ -122,18 +126,21 @@ if 'bimamba_type' not in sig or 'nslices' not in sig:
     exit(1)
 print('✓ Custom Mamba with bimamba_type and nslices verified!')
 print('Signature includes:', [p for p in sig.split(',') if 'bimamba' in p or 'nslices' in p])
-" 2>/dev/null
+"
 if [ $? -ne 0 ]; then
   echo "ERROR: Custom Mamba verification failed!"
   echo "Check logs: /tmp/causal_install.log and /tmp/mamba_install.log"
   exit 1
 fi
 
-# 14. FINAL NumPy check - force 1.24.3 one last time
+# 15. FINAL NumPy check - force 1.24.3 one last time
 echo "Final NumPy version lock..."
 pip install numpy==1.24.3 --force-reinstall --no-deps
 
-# 15. Download dataset
+# 16. Final PyTorch check before dataset download
+python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}!'; print(f'✓ Final check: PyTorch {v}')"
+
+# 17. Download dataset
 echo "Downloading FIVEs dataset..."
 gdown --id 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p
 unzip fives_preprocessed.zip
