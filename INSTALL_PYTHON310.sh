@@ -33,16 +33,25 @@ pip install wheel setuptools packaging ninja
 echo "Installing PyTorch 2.0.0 with CUDA 11.8..."
 pip install torch==2.0.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
-# 7. Install NumPy (force exact version)
-echo "Installing NumPy 1.24.3..."
-pip install --force-reinstall numpy==1.24.3
+# 7. Install NumPy FIRST with no dependencies to prevent upgrades
+echo "Installing NumPy 1.24.3 (CRITICAL - blocks NumPy 2.x)..."
+pip install numpy==1.24.3 --no-deps --force-reinstall
 
-# 8. Install core dependencies
-echo "Installing core dependencies..."
-pip install timm==0.4.12 objprint==0.2.3 accelerate==0.18.0 monai==1.1.0 mmengine==0.7.4
-pip install tensorboard easydict SimpleITK nibabel pyyaml opencv-python openpyxl scikit-learn pandas matplotlib Pillow gdown yacs
+# 8. Install exact versions from original requirements
+echo "Installing EXACT versions from original requirements..."
+pip install timm==0.4.12 --no-deps
+pip install objprint==0.2.3 --no-deps
+pip install accelerate==0.18.0
+pip install monai==1.1.0
+pip install mmengine==0.7.4
+pip install tensorboard easydict pyyaml yacs
+pip install SimpleITK nibabel opencv-python openpyxl scikit-learn pandas matplotlib Pillow gdown
 
-# 9. Try compiling Mamba from source (author's intended method)
+# 9. Force NumPy back to 1.24.3 if anything upgraded it
+echo "Re-forcing NumPy 1.24.3..."
+pip install numpy==1.24.3 --force-reinstall --no-deps
+
+# 10. Try compiling Mamba from source (author's intended method)
 echo "Attempting to compile Mamba from source..."
 cd requirements/Mamba/causal-conv1d
 pip install . --no-build-isolation 2>&1 | tee /tmp/causal_install.log
@@ -54,7 +63,7 @@ pip install . --no-build-isolation 2>&1 | tee /tmp/mamba_install.log
 MAMBA_STATUS=$?
 cd ../../..
 
-# 10. Fallback to prebuilt if compilation failed
+# 11. Fallback to prebuilt if compilation failed
 echo "Checking Mamba installation..."
 python -c "import mamba_ssm; print('Mamba installed successfully')" 2>/dev/null
 if [ $? -ne 0 ]; then
@@ -64,7 +73,11 @@ if [ $? -ne 0 ]; then
   pip install https://github.com/state-spaces/mamba/releases/download/v1.1.1/mamba_ssm-1.1.1+cu118torch2.0cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 fi
 
-# 11. Download dataset
+# 12. FINAL NumPy check - force 1.24.3 one last time
+echo "Final NumPy version lock..."
+pip install numpy==1.24.3 --force-reinstall --no-deps
+
+# 13. Download dataset
 echo "Downloading FIVEs dataset..."
 gdown --id 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p
 unzip fives_preprocessed.zip
