@@ -78,21 +78,45 @@ python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'
 
 # 12. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
 echo "Compiling CUSTOM Mamba from source (this will work with CUDA 11.8)..."
+
+# CRITICAL: Uninstall any existing mamba-ssm first
+echo "Removing any existing mamba-ssm installation..."
+pip uninstall -y mamba-ssm causal-conv1d 2>/dev/null || true
+
+# Clear pip cache to prevent using old wheels
+echo "Clearing pip cache for mamba packages..."
+pip cache remove mamba-ssm 2>/dev/null || true
+pip cache remove causal-conv1d 2>/dev/null || true
+
 cd requirements/Mamba/causal-conv1d
-pip install . --no-build-isolation 2>&1 | tee /tmp/causal_install.log
+rm -rf build/ dist/ *.egg-info 2>/dev/null || true
+pip install . --no-build-isolation --force-reinstall --no-cache-dir 2>&1 | tee /tmp/causal_install.log
 CAUSAL_STATUS=$?
 cd ../../..
 
 cd requirements/Mamba/mamba
-pip install . --no-build-isolation 2>&1 | tee /tmp/mamba_install.log
+rm -rf build/ dist/ *.egg-info 2>/dev/null || true
+pip install . --no-build-isolation --force-reinstall --no-cache-dir 2>&1 | tee /tmp/mamba_install.log
 MAMBA_STATUS=$?
 cd ../../..
 
-# 13. Verify custom Mamba installation (MUST succeed)
-echo "Verifying custom Mamba installation..."
-python -c "from mamba_ssm import Mamba; print('Custom Mamba successfully installed!')" 2>/dev/null
+# 13. Verify custom Mamba has bimamba_type and nslices parameters (CRITICAL!)
+echo "Verifying custom Mamba parameters..."
+python -c "
+from mamba_ssm import Mamba
+import inspect
+sig = str(inspect.signature(Mamba.__init__))
+if 'bimamba_type' not in sig or 'nslices' not in sig:
+    print('ERROR: Custom Mamba missing required parameters!')
+    print('Expected: bimamba_type and nslices')
+    print('Got signature:', sig)
+    print('This means the standard mamba-ssm was installed instead of the custom fork.')
+    exit(1)
+print('✓ Custom Mamba with bimamba_type and nslices verified!')
+print('Signature includes:', [p for p in sig.split(',') if 'bimamba' in p or 'nslices' in p])
+" 2>/dev/null
 if [ $? -ne 0 ]; then
-  echo "ERROR: Custom Mamba compilation failed!"
+  echo "ERROR: Custom Mamba verification failed!"
   echo "Check logs: /tmp/causal_install.log and /tmp/mamba_install.log"
   exit 1
 fi
