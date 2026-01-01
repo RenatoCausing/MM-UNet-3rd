@@ -1,19 +1,39 @@
 #!/bin/bash
 # ==========================================
-# COMPLETE SETUP - Python 3.10 Required
-# Forces Python 3.10 venv for compatibility
+# COMPLETE SETUP - Python 3.10 + CUDA 11.8 Required
+# Forces Python 3.10 venv and CUDA 11.8 for custom Mamba compilation
 # Run this from within the cloned MM-UNet-3rd directory
 # ==========================================
 
 echo "=========================================="
-echo "MM-UNet FIVEs Dataset Setup - Python 3.10"
+echo "MM-UNet FIVEs Dataset Setup - Python 3.10 + CUDA 11.8"
 echo "=========================================="
 
 # 1. System dependencies + Python 3.10
 echo "Installing system dependencies and Python 3.10..."
-apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 unzip git python3.10 python3.10-venv python3.10-dev
+apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 unzip git python3.10 python3.10-venv python3.10-dev wget
 
-# 2. Create Python 3.10 virtual environment
+# 2. Install CUDA 11.8 toolkit
+echo "Installing CUDA 11.8 toolkit..."
+# Remove existing CUDA to avoid conflicts
+apt-get --purge remove cuda* nvidia-cuda-toolkit -y 2>/dev/null || true
+
+# Download and install CUDA 11.8
+wget -q https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda_11.8.0_520.61.05_linux.run
+sh cuda_11.8.0_520.61.05_linux.run --toolkit --silent --override
+rm cuda_11.8.0_520.61.05_linux.run
+
+# Set CUDA environment
+export PATH=/usr/local/cuda-11.8/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH
+echo 'export PATH=/usr/local/cuda-11.8/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+
+# Verify CUDA installation
+echo "CUDA version:"
+nvcc --version
+
+# 3. Create Python 3.10 virtual environment
 echo "Creating Python 3.10 virtual environment..."
 python3.10 -m venv venv
 source venv/bin/activate
@@ -52,26 +72,25 @@ pip install SimpleITK nibabel opencv-python openpyxl scikit-learn pandas matplot
 echo "Re-forcing NumPy 1.24.3..."
 pip install numpy==1.24.3 --force-reinstall --no-deps
 
-# 10. Try compiling Mamba from source (author's intended method)
-echo "Attempting to compile Mamba from source..."
+# 10. Try compiling CUSTOM Mamba from source (REQUIRED for MM-UNet)
+echo "Compiling CUSTOM Mamba from source (this will work with CUDA 11.8)..."
 cd requirements/Mamba/causal-conv1d
-pip install . --no-build-isolation 2>&1 | tee /tmp/causal_install.log
+pip install -e . --no-build-isolation 2>&1 | tee /tmp/causal_install.log
 CAUSAL_STATUS=$?
 cd ../../..
 
 cd requirements/Mamba/mamba
-pip install . --no-build-isolation 2>&1 | tee /tmp/mamba_install.log
+pip install -e . --no-build-isolation 2>&1 | tee /tmp/mamba_install.log
 MAMBA_STATUS=$?
 cd ../../..
 
-# 11. Fallback to prebuilt if compilation failed
-echo "Checking Mamba installation..."
-python -c "import mamba_ssm; print('Mamba installed successfully')" 2>/dev/null
+# 11. Verify custom Mamba installation (MUST succeed)
+echo "Verifying custom Mamba installation..."
+python -c "from mamba_ssm import Mamba; print('Custom Mamba successfully installed!')" 2>/dev/null
 if [ $? -ne 0 ]; then
-  echo "Source compilation failed, installing prebuilt wheels..."
-  # Use direct wheel URLs for cu118
-  pip install https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.1.1/causal_conv1d-1.1.1+cu118torch2.0cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
-  pip install https://github.com/state-spaces/mamba/releases/download/v1.1.1/mamba_ssm-1.1.1+cu118torch2.0cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+  echo "ERROR: Custom Mamba compilation failed!"
+  echo "Check logs: /tmp/causal_install.log and /tmp/mamba_install.log"
+  exit 1
 fi
 
 # 12. FINAL NumPy check - force 1.24.3 one last time
