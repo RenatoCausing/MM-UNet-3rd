@@ -37,8 +37,8 @@ dataset:
 
   FIVEs:
     data_root: ./fives_preprocessed
-    batch_size: 3
-    num_workers: 4
+    batch_size: 2
+    num_workers: 8
     image_size: 1024
     test_ratio: 0.05
     # Note: normalization stats are computed independently for train/test
