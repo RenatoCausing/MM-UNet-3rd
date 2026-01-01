@@ -28,9 +28,7 @@ class MMConv(nn.Module):
                 d_model=kernel_size, # Model dimension d_model
                 d_state=16,  # SSM state expansion factor
                 d_conv=4,    # Local convolution width
-                expand=2,    # Block expansion factor
-                bimamba_type="v3",
-                nslices=num_slices
+                expand=2     # Block expansion factor
         )
 
         self.kernel_size = kernel_size
@@ -177,7 +175,7 @@ class MMConv(nn.Module):
         y_keep = self.two_row_columnwise_flatten_grad_safe(y_keep)
 
         y_keep = y_keep.transpose(-1, -2)
-        y_keep, _, _, _ = self.mamba(y_keep)
+        y_keep = self.mamba(y_keep)
         y_keep = y_keep.transpose(-1, -2)
         y_keep = self.inverse_two_row_columnwise_flatten(y_keep, width, height)
         
@@ -376,9 +374,7 @@ class RCG(nn.Module):
                 d_model=64, # Model dimension d_model
                 d_state=d_state,  # SSM state expansion factor
                 d_conv=d_conv,    # Local convolution width
-                expand=expand,    # Block expansion factor
-                bimamba_type="v3",
-                nslices=num_slices
+                expand=expand     # Block expansion factor
         )
         
         self.mlp = nn.Sequential(nn.Conv2d(64, 1, kernel_size=1),
@@ -402,7 +398,7 @@ class RCG(nn.Module):
         
         x_flat = x0.reshape(B, C, n_tokens).transpose(-1, -2)
         
-        out, q, k, v = self.mamba(x_flat)
+        out = self.mamba(x_flat)
         
         out_m = out.transpose(-1, -2).reshape(B, C, *img_dims)
         

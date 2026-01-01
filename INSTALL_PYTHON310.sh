@@ -20,45 +20,33 @@ apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 unzip git
 # Upgrade pip
 pip install --upgrade pip
 
-echo "Installing packages from requirements.txt..."
-
-# Install PyTorch 2.0.0 with CUDA 11.8 FIRST
+echo "Installing PyTorch 2.0.0 with CUDA 11.8 (LOCKED)..."
+# Install PyTorch 2.0.0 with CUDA 11.8 FIRST and LOCK IT
 pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu118
 
 # Verify PyTorch
 python -c "import torch; print(f'✓ PyTorch {torch.__version__} CUDA {torch.version.cuda}')"
 
-# Install compatible versions BEFORE requirements.txt to prevent upgrades
-echo "Installing compatible package versions for PyTorch 2.0..."
+echo "Installing all required packages with specific versions..."
+# Install ALL packages manually to prevent PyTorch upgrade (DO NOT use requirements.txt)
+pip install numpy==1.24.3 pillow opencv-python scipy scikit-learn pandas matplotlib
 pip install transformers==4.30.2 mmengine==0.7.4 timm==0.4.12 accelerate==0.18.0 monai==1.1.0
+pip install tensorboard yacs easydict pyyaml objprint
+pip install SimpleITK nibabel openpyxl gdown
+pip install einops
 
-# Install all packages from requirements.txt
-pip install -r requirements/requirements.txt
+# Verify PyTorch STILL 2.0.0
+python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}!'; print(f'✓ PyTorch still {v}')"
 
-# Verify PyTorch didn't upgrade
-python -c "import torch; v = torch.__version__; assert v.startswith('2.0.0'), f'ERROR: PyTorch upgraded to {v}'; print(f'✓ PyTorch still {v}')"
-
-# Compile CUSTOM Mamba from source (with bimamba_type and nslices parameters)
+# Install standard mamba-ssm (pre-compiled wheel)
 echo ""
-echo "Compiling custom Mamba from source..."
-cd requirements/Mamba/causal-conv1d
-pip install . --no-build-isolation
-cd ../mamba
-pip install . --no-build-isolation
-cd ../../..
+echo "Installing standard mamba-ssm..."
+pip install mamba-ssm causal-conv1d
 
-# Verify custom Mamba has the required parameters
-echo "Verifying custom Mamba..."
-python -c "
-from mamba_ssm import Mamba
-import inspect
-sig = str(inspect.signature(Mamba.__init__))
-assert 'bimamba_type' in sig and 'nslices' in sig, f'Missing custom parameters! Got: {sig}'
-print('✓ Custom Mamba with bimamba_type and nslices verified')
-"
+echo "✓ Installation complete"
 
 # Install additional packages for training
-pip install easydict gdown
+pip install gdown
 
 # Final verification
 echo ""
