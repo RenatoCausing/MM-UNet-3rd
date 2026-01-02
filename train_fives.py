@@ -54,8 +54,8 @@ def parse_args():
                         help='Path to checkpoint to resume from')
     parser.add_argument('--seed', type=int, default=42, 
                         help='Random seed')
-    parser.add_argument('--compute_norm', action='store_true', default=True,
-                        help='Compute normalization stats from data')
+    parser.add_argument('--compute_norm', action='store_true', default=False,
+                        help='Compute normalization stats from data (default: False, uses ImageNet stats)')
     parser.add_argument('--gpu', type=str, default='0',
                         help='GPU device ID')
     return parser.parse_args()
@@ -456,12 +456,12 @@ def main():
                     'best_dice': best_dice,
                     'test_metrics': test_metrics,
                 }, best_checkpoint_path)
-                accelerator.print(f"New best model saved! Dice: {best_dice:.5f}")
+                accelerator.print(f"New best model saved! Dice: {float(best_dice):.5f}")
         
         accelerator.print(
             f'Epoch [{epoch + 1}/{args.epochs}] '
-            f'Best Dice: {best_dice:.5f} (Epoch {best_epoch + 1}), '
-            f'Current Dice: {dice_score:.5f}'
+            f'Best Dice: {float(best_dice):.5f} (Epoch {best_epoch + 1}), '
+            f'Current Dice: {float(dice_score):.5f}'
         )
     
     # Final summary
