@@ -45,6 +45,22 @@ pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https
 # Verify
 python -c "import torch; print(f'✓ PyTorch {torch.__version__}')"
 
+# Check available CUDA paths
+echo "Checking available CUDA installations..."
+CUDA_PATH=""
+for cuda_dir in /usr/local/cuda-12.4 /usr/local/cuda-12.3 /usr/local/cuda-12.2 /usr/local/cuda-12.1 /usr/local/cuda-12 /usr/local/cuda-11.8 /usr/local/cuda-11 /usr/local/cuda; do
+    if [ -d "$cuda_dir/bin" ] && [ -f "$cuda_dir/bin/nvcc" ]; then
+        CUDA_PATH="$cuda_dir"
+        echo "✓ Found CUDA at: $CUDA_PATH"
+        break
+    fi
+done
+
+if [ -z "$CUDA_PATH" ]; then
+    echo "⚠ WARNING: No CUDA toolkit found in standard locations"
+    echo "Will attempt to compile without CUDA toolkit (using pre-built wheels if available)"
+fi
+
 # ==========================================
 # STEP 2: Install numpy 1.24.3 with --no-deps
 # ==========================================
@@ -107,11 +123,20 @@ echo "[5/6] Compiling CUSTOM Mamba (bimamba_type, nslices support)..."
 # We need to force building from our modified source code
 export MAMBA_FORCE_BUILD=TRUE
 
-# Force CUDA 11.8 during compilation to match PyTorch build
-# This prevents CUDA version mismatch errors during build_ext
-export CUDA_HOME=/usr/local/cuda-11.8
-export FORCE_CUDA=1
-export TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0"
+# If CUDA toolkit is available, set these to force CUDA 11.8 compilation
+# If not available, the build will attempt to use pre-built wheels or CPU build
+if [ ! -z "$CUDA_PATH" ]; then
+    echo "Configuring for CUDA compilation at: $CUDA_PATH"
+    export CUDA_HOME="$CUDA_PATH"
+    export FORCE_CUDA=1
+    export TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0"
+else
+    echo "No CUDA toolkit found - will use CPU-only build or pre-built wheels"
+    # Don't set CUDA variables if toolkit not found
+    unset CUDA_HOME
+    unset FORCE_CUDA
+    unset TORCH_CUDA_ARCH_LIST
+fi
 
 # Resolve source directories (some copies use different folder naming)
 CAUSAL_DIR=""
@@ -152,12 +177,32 @@ if [ -z "$CAUSAL_DIR" ] || [ ! -d "$MAMBA_DIR" ]; then
 fi
 
 # Compile causal-conv1d first
-echo "Building causal-conv1d with CUDA 11.8..."
-pip install --no-build-isolation --no-deps "$CAUSAL_DIR"
+echo "Building causal-conv1d..."
+if [ ! -z "$CUDA_PATH" ]; then
+    echo "  with CUDA support at: $CUDA_PATH"
+    CUDA_HOME="$CUDA_PATH" FORCE_CUDA=1 TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0" pip install --no-build-isolation --no-deps "$CAUSAL_DIR" 2>&1
+    if [ $? -ne 0 ]; then
+        echo "⚠ CUDA build failed, retrying with --no-build-isolation only..."
+        pip install --no-build-isolation --no-deps "$CAUSAL_DIR"
+    fi
+else
+    echo "  with CPU-only or pre-built wheel"
+    pip install --no-build-isolation --no-deps "$CAUSAL_DIR"
+fi
 
-# Compile custom mamba - MUST force build from source with CUDA 11.8
-echo "Building Mamba with CUDA 11.8..."
-MAMBA_FORCE_BUILD=TRUE FORCE_CUDA=1 CUDA_HOME=/usr/local/cuda-11.8 TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0" pip install --no-build-isolation --no-deps "$MAMBA_DIR"
+# Compile custom mamba - MUST force build from source with matched CUDA
+echo "Building Mamba..."
+if [ ! -z "$CUDA_PATH" ]; then
+    echo "  with CUDA support at: $CUDA_PATH"
+    MAMBA_FORCE_BUILD=TRUE CUDA_HOME="$CUDA_PATH" FORCE_CUDA=1 TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0" pip install --no-build-isolation --no-deps "$MAMBA_DIR" 2>&1
+    if [ $? -ne 0 ]; then
+        echo "⚠ CUDA build failed, retrying with --no-build-isolation only..."
+        MAMBA_FORCE_BUILD=TRUE pip install --no-build-isolation --no-deps "$MAMBA_DIR"
+    fi
+else
+    echo "  with CPU-only or pre-built wheel"
+    MAMBA_FORCE_BUILD=TRUE pip install --no-build-isolation --no-deps "$MAMBA_DIR"
+fi
 
 # Final numpy lock
 pip install numpy==1.24.3 --no-deps --force-reinstall
