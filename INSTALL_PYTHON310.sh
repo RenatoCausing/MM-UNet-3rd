@@ -26,6 +26,11 @@ apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 unzip git ninj
 # Upgrade pip
 pip install --upgrade pip setuptools wheel
 
+# FORCE UNINSTALL any existing torch/mamba to clear CUDA mismatches
+echo "Uninstalling any existing torch packages..."
+pip uninstall -y torch torchvision torchaudio mamba-ssm causal-conv1d 2>/dev/null || true
+pip uninstall -y torch torchvision torchaudio mamba-ssm causal-conv1d 2>/dev/null || true
+
 # Ensure pkg_resources is available for torch cpp_extension build hooks.
 pip install --force-reinstall "setuptools==69.5.1" wheel packaging
 python -c "import pkg_resources, packaging; print('✓ build deps: pkg_resources + packaging')"
@@ -35,7 +40,7 @@ python -c "import pkg_resources, packaging; print('✓ build deps: pkg_resources
 # ==========================================
 echo ""
 echo "[1/6] Installing PyTorch 2.0.0+cu118..."
-pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu118 --force-reinstall
 
 # Verify
 python -c "import torch; print(f'✓ PyTorch {torch.__version__}')"
@@ -102,6 +107,12 @@ echo "[5/6] Compiling CUSTOM Mamba (bimamba_type, nslices support)..."
 # We need to force building from our modified source code
 export MAMBA_FORCE_BUILD=TRUE
 
+# Force CUDA 11.8 during compilation to match PyTorch build
+# This prevents CUDA version mismatch errors during build_ext
+export CUDA_HOME=/usr/local/cuda-11.8
+export FORCE_CUDA=1
+export TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0"
+
 # Resolve source directories (some copies use different folder naming)
 CAUSAL_DIR=""
 for d in "$SCRIPT_DIR/requirements/Mamba/causal-conv1d" "$SCRIPT_DIR/requirements/Mamba/causal_conv1d"; do
@@ -141,10 +152,12 @@ if [ -z "$CAUSAL_DIR" ] || [ ! -d "$MAMBA_DIR" ]; then
 fi
 
 # Compile causal-conv1d first
+echo "Building causal-conv1d with CUDA 11.8..."
 pip install --no-build-isolation --no-deps "$CAUSAL_DIR"
 
-# Compile custom mamba - MUST force build from source
-MAMBA_FORCE_BUILD=TRUE pip install --no-build-isolation --no-deps "$MAMBA_DIR"
+# Compile custom mamba - MUST force build from source with CUDA 11.8
+echo "Building Mamba with CUDA 11.8..."
+MAMBA_FORCE_BUILD=TRUE FORCE_CUDA=1 CUDA_HOME=/usr/local/cuda-11.8 TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0" pip install --no-build-isolation --no-deps "$MAMBA_DIR"
 
 # Final numpy lock
 pip install numpy==1.24.3 --no-deps --force-reinstall
