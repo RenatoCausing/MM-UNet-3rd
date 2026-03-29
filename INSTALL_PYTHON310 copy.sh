@@ -6,15 +6,10 @@
 # ==========================================
 set -e  # Exit on any error
 
-# Always run from the script directory so relative paths resolve correctly.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
 echo "=========================================="
 echo "MM-UNet FIVEs - AGGRESSIVE INSTALL"
 echo "Target: PyTorch 2.0.0+cu118, Custom Mamba"
 echo "=========================================="
-echo "Script directory: $SCRIPT_DIR"
 
 # Verify environment
 echo "Python version: $(python --version)"
@@ -25,10 +20,6 @@ apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 unzip git ninj
 
 # Upgrade pip
 pip install --upgrade pip setuptools wheel
-
-# Ensure pkg_resources is available for torch cpp_extension build hooks.
-pip install --force-reinstall "setuptools==69.5.1" wheel packaging
-python -c "import pkg_resources, packaging; print('✓ build deps: pkg_resources + packaging')"
 
 # ==========================================
 # STEP 1: Install PyTorch 2.0.0+cu118 FIRST
@@ -102,49 +93,15 @@ echo "[5/6] Compiling CUSTOM Mamba (bimamba_type, nslices support)..."
 # We need to force building from our modified source code
 export MAMBA_FORCE_BUILD=TRUE
 
-# Resolve source directories (some copies use different folder naming)
-CAUSAL_DIR=""
-for d in "$SCRIPT_DIR/requirements/Mamba/causal-conv1d" "$SCRIPT_DIR/requirements/Mamba/causal_conv1d"; do
-    if [ -d "$d" ]; then
-        CAUSAL_DIR="$d"
-        break
-    fi
-done
-
-MAMBA_DIR="$SCRIPT_DIR/requirements/Mamba/mamba"
-
-# If missing, try to initialize submodules and resolve again
-if [ -z "$CAUSAL_DIR" ] || [ ! -d "$MAMBA_DIR" ]; then
-    echo "[5/6] Mamba source folders missing. Trying: git submodule update --init --recursive"
-    git submodule update --init --recursive || true
-
-    for d in "$SCRIPT_DIR/requirements/Mamba/causal-conv1d" "$SCRIPT_DIR/requirements/Mamba/causal_conv1d"; do
-        if [ -d "$d" ]; then
-            CAUSAL_DIR="$d"
-            break
-        fi
-    done
-fi
-
-if [ -z "$CAUSAL_DIR" ] || [ ! -d "$MAMBA_DIR" ]; then
-    echo "❌ ERROR: Could not find required Mamba source folders."
-    echo "Expected one of:"
-    echo "  $SCRIPT_DIR/requirements/Mamba/causal-conv1d"
-    echo "  $SCRIPT_DIR/requirements/Mamba/causal_conv1d"
-    echo "And:"
-    echo "  $SCRIPT_DIR/requirements/Mamba/mamba"
-    echo ""
-    echo "Current contents:"
-    ls -la "$SCRIPT_DIR/requirements" || true
-    ls -la "$SCRIPT_DIR/requirements/Mamba" || true
-    exit 1
-fi
-
 # Compile causal-conv1d first
-pip install --no-build-isolation --no-deps "$CAUSAL_DIR"
+cd requirements/Mamba/causal-conv1d
+pip install . --no-build-isolation --no-deps
+cd ../../..
 
 # Compile custom mamba - MUST force build from source
-MAMBA_FORCE_BUILD=TRUE pip install --no-build-isolation --no-deps "$MAMBA_DIR"
+cd requirements/Mamba/mamba
+MAMBA_FORCE_BUILD=TRUE pip install . --no-build-isolation --no-deps
+cd ../../..
 
 # Final numpy lock
 pip install numpy==1.24.3 --no-deps --force-reinstall
