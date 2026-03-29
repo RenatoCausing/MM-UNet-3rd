@@ -6,9 +6,24 @@ from torch.cuda.amp import custom_bwd, custom_fwd
 
 from einops import rearrange, repeat
 
-from causal_conv1d import causal_conv1d_fn
-import causal_conv1d_cuda
-import selective_scan_cuda
+try:
+    from causal_conv1d import causal_conv1d_fn
+except ImportError:
+    causal_conv1d_fn = None
+
+try:
+    import causal_conv1d_cuda
+except ImportError:
+    causal_conv1d_cuda = None
+
+try:
+    import selective_scan_cuda
+except ImportError:
+    selective_scan_cuda = None
+
+HAS_SELECTIVE_SCAN_CUDA = (
+    selective_scan_cuda is not None and causal_conv1d_cuda is not None and causal_conv1d_fn is not None
+)
 
 
 class SelectiveScanFn(torch.autograd.Function):
@@ -80,6 +95,19 @@ def selective_scan_fn(u, delta, A, B, C, D=None, z=None, delta_bias=None, delta_
     last_state has shape (batch, dim, dstate). Note that the gradient of the last state is
     not considered in the backward pass.
     """
+    if selective_scan_cuda is None:
+        return selective_scan_ref(
+            u,
+            delta,
+            A,
+            B,
+            C,
+            D=D,
+            z=z,
+            delta_bias=delta_bias,
+            delta_softplus=delta_softplus,
+            return_last_state=return_last_state,
+        )
     return SelectiveScanFn.apply(u, delta, A, B, C, D, z, delta_bias, delta_softplus, return_last_state)
 
 

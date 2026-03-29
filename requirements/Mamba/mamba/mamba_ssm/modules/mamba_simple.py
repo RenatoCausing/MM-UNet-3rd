@@ -16,9 +16,16 @@ except ImportError:
     causal_conv1d_fn, causal_conv1d_update = None
 
 try:
-    from mamba_ssm.ops.selective_scan_interface import selective_scan_fn, mamba_inner_fn, bimamba_inner_fn, mamba_inner_fn_no_out_proj
+    from mamba_ssm.ops.selective_scan_interface import (
+        selective_scan_fn,
+        mamba_inner_fn,
+        bimamba_inner_fn,
+        mamba_inner_fn_no_out_proj,
+        HAS_SELECTIVE_SCAN_CUDA,
+    )
 except ImportError:
     selective_scan_fn, mamba_inner_fn, bimamba_inner_fn, mamba_inner_fn_no_out_proj = None, None, None, None, None
+    HAS_SELECTIVE_SCAN_CUDA = False
 
 try:
     from mamba_ssm.ops.triton.selective_state_update import selective_state_update
@@ -62,6 +69,8 @@ class Mamba(nn.Module):
         self.d_inner = int(self.expand * self.d_model)
         self.dt_rank = math.ceil(self.d_model / 16) if dt_rank == "auto" else dt_rank
         self.use_fast_path = use_fast_path
+        if self.use_fast_path and (not HAS_SELECTIVE_SCAN_CUDA):
+            self.use_fast_path = False
         self.layer_idx = layer_idx
         self.bimamba_type = bimamba_type
         self.nslices = nslices
