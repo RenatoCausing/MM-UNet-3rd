@@ -40,18 +40,13 @@ python -c "import pkg_resources, packaging; print('✓ build deps: pkg_resources
 # ==========================================
 echo ""
 echo "[1/6] Installing PyTorch 2.0.0+cu118..."
-pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu118 --force-reinstall
+python -m pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu118 --force-reinstall
 
 # Verify
 python -c "import torch; print(f'✓ PyTorch {torch.__version__}')"
 
-# ==========================================
-# CRITICAL: Force skip CUDA detection for Mamba build
-# ==========================================
-# Remove CUDA from PATH so torch can't find nvcc during build
-# This prevents CUDA version mismatch errors
-export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin"
-echo "Removed CUDA paths from PATH to prevent detection"
+# Keep current PATH to preserve the active virtual environment.
+# We'll disable CUDA compilation explicitly via package env flags in Step 5.
 
 # ==========================================
 # STEP 2: Install numpy 1.24.3 with --no-deps
@@ -115,14 +110,10 @@ echo "[5/6] Compiling CUSTOM Mamba (bimamba_type, nslices support)..."
 # We need to force building from our modified source code
 export MAMBA_FORCE_BUILD=TRUE
 
-# CRITICAL: Disable all CUDA-related environment variables to prevent detection
-unset CUDA_HOME
-unset CUDA
-unset FORCE_CUDA
-unset TORCH_CUDA_ARCH_LIST
-unset NVIDIA_VISIBLE_DEVICES
-
-echo "All CUDA environment variables unset"
+# Force Python-only builds for local source packages to avoid CUDA 12.4 vs torch cu118 mismatch.
+export CAUSAL_CONV1D_SKIP_CUDA_BUILD=TRUE
+export MAMBA_SKIP_CUDA_BUILD=TRUE
+echo "CUDA extension builds disabled for causal-conv1d and mamba_ssm"
 
 # Resolve source directories (some copies use different folder naming)
 CAUSAL_DIR=""
@@ -163,14 +154,12 @@ if [ -z "$CAUSAL_DIR" ] || [ ! -d "$MAMBA_DIR" ]; then
 fi
 
 # Compile causal-conv1d first
-echo "Building causal-conv1d (CUDA disabled)..."
-unset CUDA_HOME CUDA FORCE_CUDA TORCH_CUDA_ARCH_LIST NVIDIA_VISIBLE_DEVICES
-pip install --no-build-isolation --no-deps "$CAUSAL_DIR" 2>&1 || pip install --no-build-isolation --no-deps "$CAUSAL_DIR"
+echo "Building causal-conv1d (SKIP_CUDA_BUILD=TRUE)..."
+CAUSAL_CONV1D_SKIP_CUDA_BUILD=TRUE python -m pip install --no-build-isolation --no-deps "$CAUSAL_DIR"
 
 # Compile custom mamba - MUST force build from source
-echo "Building Mamba (CUDA disabled, PATH stripped of CUDA)..."
-unset CUDA_HOME CUDA FORCE_CUDA TORCH_CUDA_ARCH_LIST NVIDIA_VISIBLE_DEVICES
-MAMBA_FORCE_BUILD=TRUE pip install --no-build-isolation --no-deps "$MAMBA_DIR" 2>&1 || MAMBA_FORCE_BUILD=TRUE pip install --no-build-isolation --no-deps "$MAMBA_DIR"
+echo "Building Mamba (MAMBA_SKIP_CUDA_BUILD=TRUE)..."
+MAMBA_FORCE_BUILD=TRUE MAMBA_SKIP_CUDA_BUILD=TRUE python -m pip install --no-build-isolation --no-deps "$MAMBA_DIR"
 
 # Final numpy lock
 pip install numpy==1.24.3 --no-deps --force-reinstall
