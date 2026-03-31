@@ -102,6 +102,15 @@ export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
 export PATH="$CUDA_HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH}"
 
+# torch.utils.cpp_extension imports pkg_resources from setuptools.
+# Reinstall pinned build tooling here to avoid missing pkg_resources in long installs.
+python -m pip install --upgrade --no-deps "setuptools==69.5.1" "wheel>=0.42.0" "packaging>=23.2"
+
+python - << 'PY'
+import pkg_resources
+print(f"✓ setuptools/pkg_resources: {pkg_resources.__version__}")
+PY
+
 python - << 'PY'
 import os
 import sys
