@@ -107,8 +107,11 @@ export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH}"
 python -m pip install --upgrade --no-deps "setuptools==69.5.1" "wheel>=0.42.0" "packaging>=23.2"
 
 python - << 'PY'
+import setuptools
 import pkg_resources
-print(f"✓ setuptools/pkg_resources: {pkg_resources.__version__}")
+
+print(f"✓ setuptools: {setuptools.__version__}")
+print("✓ pkg_resources: available")
 PY
 
 python - << 'PY'
