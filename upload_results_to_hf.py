@@ -8,6 +8,7 @@ import os
 import sys
 import argparse
 import json
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -103,23 +104,43 @@ def upload_to_hf(
         # Create target path in HF repo
         hf_path = f"{upload_folder}/{rel_path}".replace("\\", "/")
         
-        try:
-            print(f"[{uploaded_count+1}/{len(files_to_upload)}] {rel_path}...", end=" ", flush=True)
-            
-            api.upload_file(
-                path_or_fileobj=file_path,
-                path_in_repo=hf_path,
-                repo_id=hf_repo,
-                token=hf_token,
-                commit_message=description or f"Upload test results {timestamp}"
-            )
-            
-            print("✓")
-            uploaded_count += 1
-            
-        except Exception as e:
-            print(f"✗ ({str(e)[:50]}...)")
-            failed_files.append((rel_path, str(e)))
+        max_retries = 3
+        retry_count = 0
+        success = False
+        
+        while retry_count < max_retries and not success:
+            try:
+                print(f"[{uploaded_count+1}/{len(files_to_upload)}] {rel_path}...", end=" ", flush=True)
+                
+                api.upload_file(
+                    path_or_fileobj=file_path,
+                    path_in_repo=hf_path,
+                    repo_id=hf_repo,
+                    token=hf_token,
+                    commit_message=description or f"Upload test results {timestamp}"
+                )
+                
+                print("✓")
+                uploaded_count += 1
+                success = True
+                
+            except Exception as e:
+                error_str = str(e)
+                
+                # Check for rate limiting
+                if "429" in error_str or "Too Many Requests" in error_str:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        wait_time = 10 * retry_count  # 10s, 20s, 30s
+                        print(f"\n  ⚠ Rate limited (429). Waiting {wait_time}s before retry {retry_count}/{max_retries-1}...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"✗ (Rate limited after {max_retries} retries)")
+                        failed_files.append((rel_path, error_str[:80]))
+                else:
+                    print(f"✗ ({error_str[:50]}...)")
+                    failed_files.append((rel_path, error_str[:80]))
+                    break
     
     print(f"\n{'='*70}")
     print(f"Upload Summary")
@@ -132,7 +153,11 @@ def upload_to_hf(
     if failed_files:
         print(f"\nFailed files:")
         for file_path, error in failed_files:
-            print(f"  ✗ {file_path}: {error[:60]}")
+            is_rate_limit = "429" in error or "Too Many Requests" in error
+            if is_rate_limit:
+                print(f"  ✗ {file_path}: RATE LIMITED (wait and retry)")
+            else:
+                print(f"  ✗ {file_path}: {error[:60]}")
     
     print(f"{'='*70}\n")
     
@@ -140,7 +165,13 @@ def upload_to_hf(
         print(f"✓ All files uploaded successfully!")
         return True
     else:
-        print(f"⚠ Some files failed to upload ({len(failed_files)} errors)")
+        if any("429" in str(err) or "Too Many Requests" in str(err) for _, err in failed_files):
+            print(f"⚠ Upload hit rate limiting. Wait 1-2 minutes and retry:")
+            print(f"  python upload_results_to_hf.py \\")
+            print(f"    --results_dir {results_dir} \\")
+            print(f"    --hf_repo {hf_repo}")
+        else:
+            print(f"⚠ Some files failed to upload ({len(failed_files)} errors)")
         return False
 
 
@@ -195,7 +226,7 @@ def main():
     # Get token from args or environment
     hf_token = args.hf_token or os.getenv("HF_TOKEN")
     
-    if not hf_token:
+    if not hf_token and not args.dry_run:
         print("❌ Error: HuggingFace token not provided!")
         print("   Either:")
         print("   1. Pass --hf_token argument")
