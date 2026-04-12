@@ -191,7 +191,8 @@ def load_model_checkpoint(model, checkpoint_path, device):
 def run_inference_single_image():
     """Test single APTOS image with multiple epochs"""
     print("\n" + "="*80)
-    print("TESTING SINGLE APTOS IMAGE WITH EPOCHS 10, 20, 30, 40")    print("="*80)    print("="*80)
+    print("TESTING SINGLE APTOS IMAGE WITH EPOCHS 1, 2, 3, 4, 5")
+    print("="*80)
     
     # Load config
     try:
