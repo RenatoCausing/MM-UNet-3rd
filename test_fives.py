@@ -260,6 +260,10 @@ def test_model(
     for batch_idx, (images, masks) in enumerate(test_loader):
         accelerator.print(f"Processing batch {batch_idx + 1}/{len(test_loader)}")
         
+        # Move images to device (GPU)
+        images = images.to(accelerator.device)
+        masks = masks.to(accelerator.device)
+        
         # Forward pass with sliding window inference
         logits = inference(images, model)
         
@@ -268,9 +272,6 @@ def test_model(
         
         # Get binary predictions (for other metrics)
         preds_binary = threshold_transform(probs)
-        
-        # Ensure masks are on same device as predictions
-        masks = masks.to(preds_binary.device)
         
         # Update MONAI metrics
         dice_metric(y_pred=preds_binary, y=masks)
