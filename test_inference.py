@@ -187,13 +187,20 @@ def load_model_checkpoint(model, checkpoint_path, device):
 
 
 def download_checkpoints(epochs=[10, 20, 30, 40]):
-    """Download model checkpoints from HuggingFace"""
-    login(token=HF_TOKEN)
-    
+    """Download model checkpoints from HuggingFace or use cached versions"""
     checkpoints = {}
     
     for epoch in epochs:
         checkpoint_name = f"checkpoint_epoch_{epoch:04d}.pth"
+        cache_path = f"./hf_cache/{checkpoint_name}"
+        
+        # Check if file already exists locally
+        if os.path.exists(cache_path):
+            print(f"Found cached checkpoint: {cache_path}")
+            checkpoints[epoch] = cache_path
+            continue
+        
+        # Try to download if not cached
         try:
             print(f"Downloading {checkpoint_name} from {HF_REPO}...")
             path = hf_hub_download(
@@ -205,7 +212,8 @@ def download_checkpoints(epochs=[10, 20, 30, 40]):
             checkpoints[epoch] = path
             print(f"  Downloaded to: {path}")
         except Exception as e:
-            print(f"  Error downloading {checkpoint_name}: {e}")
+            print(f"  ⚠ Error downloading {checkpoint_name}: {e}")
+            print(f"  Skipping epoch {epoch}...")
     
     return checkpoints
 
