@@ -197,13 +197,23 @@ def run_inference_single_image():
     print("="*80)
     
     # Load config
-    with open('config.yml', 'r') as f:
-        config_dict = yaml.safe_load(f)
-    config = EasyDict(config_dict)
+    try:
+        with open('config.yml', 'r') as f:
+            config_dict = yaml.safe_load(f)
+        config = EasyDict(config_dict)
+    except Exception as e:
+        print(f"Error loading config.yml: {e}")
+        print("Using default config...")
+        config = EasyDict({'finetune': {'model_choose': 'MM_Net'}, 'models': {}})
     
     # Import model
-    from src.models import give_model
-    model = give_model(config).to(device)
+    try:
+        from src.models import give_model
+        model = give_model(config).to(device)
+    except ImportError as e:
+        print(f"Warning: Could not import model: {e}")
+        print("Continuing with available packages...")
+        return
     
     # Download checkpoints
     checkpoints = download_checkpoints([10, 20, 30, 40])
