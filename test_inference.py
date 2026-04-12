@@ -13,14 +13,39 @@ import cv2
 import torch
 import matplotlib.pyplot as plt
 from pathlib import Path
-from huggingface_hub import hf_hub_download, login
-from torch.utils.data import DataLoader, Dataset
-import yaml
-from easydict import EasyDict
+import warnings
+warnings.filterwarnings('ignore')
+
+# Suppress selective_scan_cuda import warnings
+os.environ['MAMBA_SKIP_CUDA_BUILD'] = '1'
+
+try:
+    from huggingface_hub import hf_hub_download, login
+except ImportError:
+    print("Warning: huggingface_hub not found, will try to install...")
+    os.system("pip install huggingface-hub -q")
+    from huggingface_hub import hf_hub_download, login
+
+try:
+    from torch.utils.data import DataLoader, Dataset
+    import yaml
+    from easydict import EasyDict
+except ImportError as e:
+    print(f"Warning: Missing package {e}, installing...")
+    os.system("pip install pyyaml easydict -q")
+    from torch.utils.data import DataLoader, Dataset
+    import yaml
+    from easydict import EasyDict
 
 # Set device
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+try:
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+except Exception as e:
+    print(f"Warning: Error checking CUDA availability: {e}")
+    device = torch.device('cpu')
+
 print(f"Using device: {device}")
+print(f"CUDA available: {torch.cuda.is_available()}")
 
 # HuggingFace credentials
 HF_TOKEN = "0b489b4559640c39a305a24313c85587"
