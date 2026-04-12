@@ -1,0 +1,43 @@
+{
+  "normalization": {
+    "n_train": 2926,
+    "n_test": 154,
+    "train_mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "train_std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "test_mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "test_std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "image_size": 1024
+  },
+  "model": "MM_Net",
+  "epochs_tested": {
+    "single_image": [
+      10,
+      20,
+      30,
+      40
+    ],
+    "multi_images": 40
+  },
+  "num_images_single": 1,
+  "num_images_multi": 20,
+  "output_directories": {
+    "single_image": "inference_results/single_image_epochs_10_20_30_40",
+    "multi_images": "inference_results/20_images_epoch_40"
+  }
+}
