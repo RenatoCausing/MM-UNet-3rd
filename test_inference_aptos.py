@@ -58,16 +58,17 @@ for key, val in NORM_CONFIG.items():
 
 # Output paths
 OUTPUT_BASE = Path("inference_results_aptos")
-SINGLE_IMAGE_DIR = OUTPUT_BASE / "single_image_epochs_10_20_30_40"
-MULTI_IMAGE_DIR = OUTPUT_BASE / "21_aptos_images_epoch_40"
+SINGLE_IMAGE_DIR = OUTPUT_BASE / "single_image_epochs_1_2_3_4_5"
+MULTI_IMAGE_DIR = OUTPUT_BASE / "21_aptos_images_epoch_5"
 
 # HuggingFace config
 HF_REPO = "23LebronJames23/MM-UNet"
 HF_CHECKPOINTS = {
-    10: "checkpoint_epoch_0010.pth",
-    20: "checkpoint_epoch_0020.pth",
-    30: "checkpoint_epoch_0030.pth",
-    40: "checkpoint_epoch_0040.pth",
+    1: "checkpoint_epoch_0001.pth",
+    2: "checkpoint_epoch_0002.pth",
+    3: "checkpoint_epoch_0003.pth",
+    4: "checkpoint_epoch_0004.pth",
+    5: "checkpoint_epoch_0005.pth",
 }
 
 def preprocess_image(image, norm_mean=None, norm_std=None, target_size=1024):
@@ -190,8 +191,7 @@ def load_model_checkpoint(model, checkpoint_path, device):
 def run_inference_single_image():
     """Test single APTOS image with multiple epochs"""
     print("\n" + "="*80)
-    print("TESTING SINGLE APTOS IMAGE WITH EPOCHS 10, 20, 30, 40")
-    print("="*80)
+    print("TESTING SINGLE APTOS IMAGE WITH EPOCHS 10, 20, 30, 40")    print("="*80)    print("="*80)
     
     # Load config
     try:
@@ -214,7 +214,7 @@ def run_inference_single_image():
         return
     
     # Download checkpoints
-    checkpoints = download_checkpoints([10, 20, 30, 40])
+    checkpoints = download_checkpoints([1, 2, 3, 4, 5])
     
     if not checkpoints:
         print("Error: No checkpoints downloaded!")
@@ -295,9 +295,9 @@ def run_inference_single_image():
         print(f"  Results saved to: {output_dir}")
 
 def run_inference_21_images():
-    """Test 21 APTOS images with epoch 40"""
+    """Test 21 APTOS images with epoch 5"""
     print("\n" + "="*80)
-    print("TESTING 21 APTOS IMAGES WITH EPOCH 40")
+    print("TESTING 21 APTOS IMAGES WITH EPOCH 5")
     print("="*80)
     
     # Load config
@@ -320,14 +320,14 @@ def run_inference_21_images():
         print(f"❌ Error importing model: {e}")
         return
     
-    # Download checkpoint for epoch 40
-    checkpoints = download_checkpoints([40])
+    # Download checkpoint for epoch 5
+    checkpoints = download_checkpoints([5])
     
-    if 40 not in checkpoints:
-        print("Error: Could not download epoch 40 checkpoint!")
+    if 5 not in checkpoints:
+        print("Error: Could not download epoch 5 checkpoint!")
         return
     
-    checkpoint_path = checkpoints[40]
+    checkpoint_path = checkpoints[5]
     
     # Find test images
     test_dir = Path("aptos_preprocessed/Original")
@@ -390,7 +390,7 @@ def run_inference_21_images():
             original_image,
             output_binary,
             output_dir / "comparison.png",
-            epoch=40
+            epoch=5
         )
         
         # Save segmentation mask
@@ -405,6 +405,8 @@ if __name__ == "__main__":
     print("MM-UNet Inference Test Script - APTOS 2019")
     print(f"Device: {device}")
     print(f"Output base directory: {OUTPUT_BASE}")
+    print("Testing with epochs: 1, 2, 3, 4, 5 (early training progression)")
+    print()
     
     try:
         # Test single image with multiple epochs

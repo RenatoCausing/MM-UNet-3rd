@@ -82,8 +82,8 @@ NORM_CONFIG = {
 OUTPUT_BASE = Path("./inference_results")
 OUTPUT_BASE.mkdir(exist_ok=True)
 
-SINGLE_IMAGE_DIR = OUTPUT_BASE / "single_image_epochs_10_20_30_40"
-MULTI_IMAGE_DIR = OUTPUT_BASE / "20_images_epoch_40"
+SINGLE_IMAGE_DIR = OUTPUT_BASE / "single_image_epochs_1_2_3_4_5"
+MULTI_IMAGE_DIR = OUTPUT_BASE / "20_images_epoch_5"
 
 SINGLE_IMAGE_DIR.mkdir(exist_ok=True, parents=True)
 MULTI_IMAGE_DIR.mkdir(exist_ok=True, parents=True)
@@ -234,7 +234,7 @@ def download_checkpoints(epochs=[10, 20, 30, 40]):
 def run_inference_single_image():
     """Test single image with multiple epochs"""
     print("\n" + "="*80)
-    print("TESTING SINGLE IMAGE WITH EPOCHS 10, 20, 30, 40")
+    print("TESTING SINGLE IMAGE WITH EPOCHS 1, 2, 3, 4, 5")
     print("="*80)
     
     # Load config
@@ -261,7 +261,7 @@ def run_inference_single_image():
         return
     
     # Download checkpoints
-    checkpoints = download_checkpoints([10, 20, 30, 40])
+    checkpoints = download_checkpoints([1, 2, 3, 4, 5])
     
     if not checkpoints:
         print("Error: No checkpoints downloaded!")
@@ -358,9 +358,9 @@ def run_inference_single_image():
 
 
 def run_inference_20_images():
-    """Test 20 random images with epoch 40"""
+    """Test 20 random images with epoch 5"""
     print("\n" + "="*80)
-    print("TESTING 20 RANDOM IMAGES WITH EPOCH 40")
+    print("TESTING 20 RANDOM IMAGES WITH EPOCH 5")
     print("="*80)
     
     # Load config
@@ -385,14 +385,14 @@ def run_inference_20_images():
         traceback.print_exc()
         return
     
-    # Download checkpoint for epoch 40
-    checkpoints = download_checkpoints([40])
+    # Download checkpoint for epoch 5
+    checkpoints = download_checkpoints([5])
     
-    if 40 not in checkpoints:
-        print("Error: Could not download epoch 40 checkpoint!")
+    if 5 not in checkpoints:
+        print("Error: Could not download epoch 5 checkpoint!")
         return
     
-    checkpoint_path = checkpoints[40]
+    checkpoint_path = checkpoints[5]
     
     # Find test images
     search_paths = [
@@ -481,7 +481,7 @@ def run_inference_20_images():
             original_image,
             output_binary,
             output_dir / "comparison.png",
-            epoch=40
+            epoch=5
         )
         
         # Save just the segmentation mask
@@ -499,8 +499,8 @@ def save_config_info():
         "normalization": NORM_CONFIG,
         "model": "MM_Net",
         "epochs_tested": {
-            "single_image": [10, 20, 30, 40],
-            "multi_images": 40
+            "single_image": [1, 2, 3, 4, 5],
+            "multi_images": 5
         },
         "num_images_single": 1,
         "num_images_multi": 20,
@@ -523,10 +523,10 @@ if __name__ == "__main__":
     print(f"Output base directory: {OUTPUT_BASE}")
     
     try:
-        # Test single image with multiple epochs
+        # Test single image with epochs 1-5
         run_inference_single_image()
         
-        # Test 20 images with epoch 40
+        # Test 20 images with epoch 5
         run_inference_20_images()
         
         # Save configuration info
