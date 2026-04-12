@@ -105,10 +105,43 @@ pip install numpy==1.24.3 --no-deps --force-reinstall
 echo ""
 echo "[5/6] Compiling CUSTOM Mamba (bimamba_type, nslices support)..."
 
+# Remove stale installs that can shadow freshly built extensions.
+pip uninstall -y mamba-ssm mamba_ssm causal-conv1d causal_conv1d || true
+
 # CRITICAL: Set MAMBA_FORCE_BUILD to prevent downloading pre-built wheels
 # The setup.py has CachedWheelsCommand that downloads official wheels by default
 # We need to force building from our modified source code
 export MAMBA_FORCE_BUILD=TRUE
+export FORCE_CUDA=1
+
+# Ensure build sees CUDA toolkit paths and fail fast if missing.
+export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH}"
+
+# torch.utils.cpp_extension imports pkg_resources from setuptools.
+# Reinstall pinned build tooling here to avoid missing pkg_resources in long installs.
+python -m pip install --upgrade --no-deps "setuptools==69.5.1" "wheel>=0.42.0" "packaging>=23.2"
+
+python - << 'PY'
+import setuptools
+import pkg_resources
+
+print(f"✓ setuptools: {setuptools.__version__}")
+print("✓ pkg_resources: available")
+PY
+
+python - << 'PY'
+import os
+import sys
+from torch.utils.cpp_extension import CUDA_HOME
+
+cuda_home = CUDA_HOME or os.environ.get("CUDA_HOME")
+if not cuda_home:
+    print("❌ ERROR: CUDA_HOME not found. selective_scan_cuda cannot be compiled.")
+    sys.exit(1)
+print(f"✓ CUDA_HOME: {cuda_home}")
+PY
 
 # Force Python-only builds for local source packages to avoid CUDA 12.4 vs torch cu118 mismatch.
 export CAUSAL_CONV1D_SKIP_CUDA_BUILD=TRUE
@@ -208,6 +241,23 @@ if 'nslices' not in params:
     print('❌ ERROR: Mamba does not have nslices parameter!')
     sys.exit(1)
 print('✓ Custom Mamba: nslices parameter found')
+
+# Check CUDA extensions used by mamba_ssm ops
+try:
+    import selective_scan_cuda
+    print('✓ selective_scan_cuda: import OK')
+except Exception as e:
+    print(f'❌ ERROR: selective_scan_cuda import failed: {e}')
+    print('   Re-run installation and ensure nvcc/CUDA toolkit is available during build')
+    sys.exit(1)
+
+try:
+    import causal_conv1d_cuda
+    print('✓ causal_conv1d_cuda: import OK')
+except Exception as e:
+    print(f'❌ ERROR: causal_conv1d_cuda import failed: {e}')
+    print('   Re-run installation and ensure nvcc/CUDA toolkit is available during build')
+    sys.exit(1)
 
 # Check other critical packages
 import timm
