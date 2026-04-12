@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Inference test script for MM-UNet model
-Tests 1 image with multiple epochs (10, 20, 30, 40) and 20 images with epoch 40
+Inference test script for MM-UNet on APTOS 2019 dataset
+Tests on 21 retinal fundus images with epochs 10, 20, 30, 40
 """
 
 import os
@@ -11,24 +11,16 @@ import random
 import warnings
 warnings.filterwarnings('ignore')
 
-# Suppress selective_scan_cuda import warnings
-os.environ['MAMBA_SKIP_CUDA_BUILD'] = '1'
-
-# CRITICAL: Apply causal_conv1d patch BEFORE any other imports
-# This fixes CUDA/PyTorch version mismatch issues
+# Apply causal_conv1d patch BEFORE any other imports
 try:
     from causal_conv1d_patch import patch_causal_conv1d
     patch_causal_conv1d()
 except ImportError:
-    # If patch can't be imported, try to manually fix it
     import types
     if 'causal_conv1d' not in sys.modules:
         causal_conv1d = types.ModuleType('causal_conv1d')
-        causal_conv1d.causal_conv1d_fn = lambda *args, **kwargs: None
-        causal_conv1d.causal_conv1d_update = lambda *args, **kwargs: None
         sys.modules['causal_conv1d'] = causal_conv1d
 
-# Now safe to import torch and other packages
 import numpy as np
 import cv2
 import torch
@@ -36,11 +28,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 try:
-    from huggingface_hub import hf_hub_download, login
+    from huggingface_hub import hf_hub_download
 except ImportError:
-    print("Warning: huggingface_hub not found, will try to install...")
     os.system("pip install huggingface-hub -q")
-    from huggingface_hub import hf_hub_download, login
+    from huggingface_hub import hf_hub_download
 
 try:
     from torch.utils.data import DataLoader, Dataset
@@ -48,63 +39,36 @@ try:
     from easydict import EasyDict
 except ImportError as e:
     print(f"Warning: Missing package {e}, installing...")
-    os.system("pip install pyyaml easydict -q")
-    from torch.utils.data import DataLoader, Dataset
-    import yaml
-    from easydict import EasyDict
+    os.system(f"pip install {str(e).split()[-1]} -q")
 
-# Set device
-try:
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-except Exception as e:
-    print(f"Warning: Error checking CUDA availability: {e}")
-    device = torch.device('cpu')
-
+# Device
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 print(f"CUDA available: {torch.cuda.is_available()}")
 
-# HuggingFace credentials
-HF_TOKEN = "0b489b4559640c39a305a24313c85587"
-HF_REPO = "23LebronJames23/MM-UNet"
-
-# Normalization stats from user
+# Normalization config
 NORM_CONFIG = {
-    "n_train": 2926,
-    "n_test": 154,
-    "train_mean": [0.485, 0.456, 0.406],
-    "train_std": [0.229, 0.224, 0.225],
-    "test_mean": [0.485, 0.456, 0.406],
-    "test_std": [0.229, 0.224, 0.225],
-    "image_size": 1024
+    'train_mean': [0.485, 0.456, 0.406],
+    'train_std': [0.229, 0.224, 0.225]
 }
 
-# Output directories
-OUTPUT_BASE = Path("./inference_results")
-OUTPUT_BASE.mkdir(exist_ok=True)
+print("\nNormalization config loaded:")
+for key, val in NORM_CONFIG.items():
+    print(f"  {key}: {val}")
 
+# Output paths
+OUTPUT_BASE = Path("inference_results_aptos")
 SINGLE_IMAGE_DIR = OUTPUT_BASE / "single_image_epochs_10_20_30_40"
-MULTI_IMAGE_DIR = OUTPUT_BASE / "20_images_epoch_40"
+MULTI_IMAGE_DIR = OUTPUT_BASE / "21_aptos_images_epoch_40"
 
-SINGLE_IMAGE_DIR.mkdir(exist_ok=True, parents=True)
-MULTI_IMAGE_DIR.mkdir(exist_ok=True, parents=True)
-
-print(f"Normalization config loaded:")
-print(f"  Mean: {NORM_CONFIG['train_mean']}")
-print(f"  Std: {NORM_CONFIG['train_std']}")
-print(f"  Image size: {NORM_CONFIG['image_size']}")
-
-
-class SimpleImageDataset(Dataset):
-    """Simple dataset for loading images from a directory"""
-    def __init__(self, image_paths):
-        self.image_paths = image_paths
-    
-    def __len__(self):
-        return len(self.image_paths)
-    
-    def __getitem__(self, idx):
-        return self.image_paths[idx]
-
+# HuggingFace config
+HF_REPO = "23LebronJames23/MM-UNet"
+HF_CHECKPOINTS = {
+    10: "checkpoint_epoch_0010.pth",
+    20: "checkpoint_epoch_0020.pth",
+    30: "checkpoint_epoch_0030.pth",
+    40: "checkpoint_epoch_0040.pth",
+}
 
 def preprocess_image(image, norm_mean=None, norm_std=None, target_size=1024):
     """Preprocess a single image for inference"""
@@ -136,7 +100,6 @@ def preprocess_image(image, norm_mean=None, norm_std=None, target_size=1024):
     
     return image_tensor, (original_h, original_w)
 
-
 def save_comparison(original_img, segmented_img, output_path, epoch=None):
     """Save original and segmented images side by side"""
     fig, axes = plt.subplots(1, 2, figsize=(14, 7))
@@ -150,16 +113,14 @@ def save_comparison(original_img, segmented_img, output_path, epoch=None):
         original_display = original_img
     
     axes[0].imshow(original_display)
-    axes[0].set_title(f"Original Image", fontsize=12, fontweight='bold')
+    axes[0].set_title(f"Original APTOS Image", fontsize=12, fontweight='bold')
     axes[0].axis('off')
     
     # Segmented image
     segmented_img_display = segmented_img.squeeze()
     if segmented_img_display.max() <= 1.0:
-        # If normalized, show as grayscale
         axes[1].imshow(segmented_img_display, cmap='gray', vmin=0, vmax=1)
     else:
-        # If uint8, show as is
         axes[1].imshow(segmented_img_display, cmap='gray', vmin=0, vmax=255)
     
     if epoch is not None:
@@ -174,33 +135,8 @@ def save_comparison(original_img, segmented_img, output_path, epoch=None):
     
     print(f"  Saved comparison: {output_path}")
 
-
-def load_model_checkpoint(model, checkpoint_path, device):
-    """Load model checkpoint using safe loading"""
-    try:
-        from safe_model_loading import safe_load_checkpoint
-        return safe_load_checkpoint(model, checkpoint_path, device)
-    except ImportError:
-        # Fallback if safe_model_loading not available
-        print(f"Loading checkpoint: {checkpoint_path}")
-        try:
-            checkpoint = torch.load(checkpoint_path, map_location=device)
-            
-            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-                model.load_state_dict(checkpoint['model_state_dict'])
-            elif isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-                model.load_state_dict(checkpoint['state_dict'])
-            else:
-                model.load_state_dict(checkpoint)
-            
-            return True
-        except Exception as e:
-            print(f"Warning: Checkpoint loading failed: {e}")
-            return False
-
-
 def download_checkpoints(epochs=[10, 20, 30, 40]):
-    """Download model checkpoints from HuggingFace or use cached versions"""
+    """Download checkpoints from local cache or HuggingFace"""
     checkpoints = {}
     
     for epoch in epochs:
@@ -219,7 +155,6 @@ def download_checkpoints(epochs=[10, 20, 30, 40]):
             path = hf_hub_download(
                 repo_id=HF_REPO,
                 filename=checkpoint_name,
-                token=HF_TOKEN,
                 cache_dir="./hf_cache"
             )
             checkpoints[epoch] = path
@@ -230,11 +165,32 @@ def download_checkpoints(epochs=[10, 20, 30, 40]):
     
     return checkpoints
 
+def load_model_checkpoint(model, checkpoint_path, device):
+    """Load model checkpoint"""
+    try:
+        from safe_model_loading import safe_load_checkpoint
+        return safe_load_checkpoint(model, checkpoint_path, device)
+    except ImportError:
+        print(f"Loading checkpoint: {checkpoint_path}")
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            
+            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['model_state_dict'])
+            elif isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['state_dict'])
+            else:
+                model.load_state_dict(checkpoint)
+            
+            return True
+        except Exception as e:
+            print(f"Warning: Checkpoint loading failed: {e}")
+            return False
 
 def run_inference_single_image():
-    """Test single image with multiple epochs"""
+    """Test single APTOS image with multiple epochs"""
     print("\n" + "="*80)
-    print("TESTING SINGLE IMAGE WITH EPOCHS 10, 20, 30, 40")
+    print("TESTING SINGLE APTOS IMAGE WITH EPOCHS 10, 20, 30, 40")
     print("="*80)
     
     # Load config
@@ -244,10 +200,9 @@ def run_inference_single_image():
         config = EasyDict(config_dict)
     except Exception as e:
         print(f"Error loading config.yml: {e}")
-        print("Using default config...")
         config = EasyDict({'finetune': {'model_choose': 'MM_Net'}, 'models': {}})
     
-    # Import model using safe loading
+    # Import model
     try:
         from safe_model_loading import load_model_safe
         model = load_model_safe(config, device)
@@ -256,8 +211,6 @@ def run_inference_single_image():
             return
     except Exception as e:
         print(f"❌ Error: Could not import model: {e}")
-        import traceback
-        traceback.print_exc()
         return
     
     # Download checkpoints
@@ -267,42 +220,27 @@ def run_inference_single_image():
         print("Error: No checkpoints downloaded!")
         return
     
-    # For demo purposes, use synthetic image or first available test image
-    # You may need to modify this to load actual test images from your dataset
-    test_image_path = None
+    # Find first test image
+    test_dir = Path("aptos_preprocessed/Original")
+    if not test_dir.exists():
+        print(f"Error: {test_dir} not found!")
+        return
     
-    # Try to find test images in common locations
-    search_paths = [
-        './fives_preprocessed/test',
-        './data/test',
-        './test_images',
-        './datasets/test'
-    ]
+    image_files = sorted(list(test_dir.glob("*.png")))
+    if not image_files:
+        print(f"Error: No images found in {test_dir}")
+        return
     
-    for search_path in search_paths:
-        if os.path.exists(search_path):
-            image_files = [f for f in os.listdir(search_path) if f.endswith(('.jpg', '.png', '.jpeg'))]
-            if image_files:
-                test_image_path = os.path.join(search_path, image_files[0])
-                break
+    test_image_path = str(image_files[0])
+    print(f"\nTesting with image: {test_image_path}")
     
-    if test_image_path is None:
-        # Create a dummy test image for demonstration
-        print("No test images found. Creating a synthetic test image for demonstration...")
-        dummy_image = np.random.randint(0, 256, (1024, 1024, 3), dtype=np.uint8)
-        test_image_path = "dummy_test_image.png"
-        cv2.imwrite(test_image_path, dummy_image)
-    
-    print(f"Testing with image: {test_image_path}")
-    
-    # Read and preprocess the image
+    # Read and preprocess
     original_image = cv2.imread(test_image_path, cv2.IMREAD_COLOR)
     if original_image is None:
         print(f"Error: Could not load image {test_image_path}")
         return
     
     original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
-    
     image_tensor, orig_size = preprocess_image(original_image)
     
     if image_tensor is None:
@@ -343,7 +281,7 @@ def run_inference_single_image():
         
         # Save comparison
         output_dir = SINGLE_IMAGE_DIR / f"epoch_{epoch:02d}"
-        output_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
         
         save_comparison(
             original_image,
@@ -356,11 +294,10 @@ def run_inference_single_image():
         cv2.imwrite(str(output_dir / "segmentation_mask.png"), (output_binary * 255).astype(np.uint8))
         print(f"  Results saved to: {output_dir}")
 
-
-def run_inference_20_images():
-    """Test 20 random images with epoch 40"""
+def run_inference_21_images():
+    """Test 21 APTOS images with epoch 40"""
     print("\n" + "="*80)
-    print("TESTING 20 RANDOM IMAGES WITH EPOCH 40")
+    print("TESTING 21 APTOS IMAGES WITH EPOCH 40")
     print("="*80)
     
     # Load config
@@ -372,7 +309,7 @@ def run_inference_20_images():
         print(f"Error loading config.yml: {e}")
         config = EasyDict({'finetune': {'model_choose': 'MM_Net'}, 'models': {}})
     
-    # Import model using safe loading
+    # Import model
     try:
         from safe_model_loading import load_model_safe
         model = load_model_safe(config, device)
@@ -381,8 +318,6 @@ def run_inference_20_images():
             return
     except Exception as e:
         print(f"❌ Error importing model: {e}")
-        import traceback
-        traceback.print_exc()
         return
     
     # Download checkpoint for epoch 40
@@ -395,57 +330,31 @@ def run_inference_20_images():
     checkpoint_path = checkpoints[40]
     
     # Find test images
-    search_paths = [
-        './fives_preprocessed/test',
-        './data/test',
-        './test_images',
-        './datasets/test'
-    ]
+    test_dir = Path("aptos_preprocessed/Original")
+    if not test_dir.exists():
+        print(f"Error: {test_dir} not found!")
+        return
     
-    image_files = []
-    for search_path in search_paths:
-        if os.path.exists(search_path):
-            found_files = [
-                os.path.join(search_path, f) 
-                for f in os.listdir(search_path) 
-                if f.endswith(('.jpg', '.png', '.jpeg'))
-            ]
-            image_files.extend(found_files)
-            break
+    image_files = sorted(list(test_dir.glob("*.png")))[:21]
     
     if not image_files:
-        print("No test images found. Creating synthetic images for demonstration...")
-        os.makedirs("demo_images", exist_ok=True)
-        for i in range(21):
-            dummy_image = np.random.randint(0, 256, (1024, 1024, 3), dtype=np.uint8)
-            path = f"demo_images/image_{i:03d}.png"
-            cv2.imwrite(path, dummy_image)
-            image_files.append(path)
+        print(f"Error: No images found in {test_dir}")
+        return
     
-    # Select 20 random images (or use first 20)
-    if len(image_files) > 20:
-        selected_images = random.sample(image_files, 20)
-    else:
-        selected_images = image_files[:20] if len(image_files) >= 20 else image_files
+    print(f"Found {len(image_files)} images to process\n")
     
-    print(f"Selected {len(selected_images)} images for testing")
-    
-    # Load model checkpoint
-    if model is not None:
-        if not load_model_checkpoint(model, checkpoint_path, device):
-            print("⚠ Warning: Checkpoint loading had issues, continuing anyway...")
-    else:
-        print("⚠ Warning: Model is None, skipping checkpoint loading")
+    if not load_model_checkpoint(model, checkpoint_path, device):
+        print("Error: Could not load checkpoint!")
         return
     
     model.eval()
     
     # Process each image
-    for idx, image_path in enumerate(selected_images):
-        print(f"\nProcessing image {idx+1}/{len(selected_images)}: {os.path.basename(image_path)}")
+    for idx, image_path in enumerate(image_files):
+        print(f"\nProcessing image {idx+1}/{len(image_files)}: {image_path.name}")
         
-        # Read and preprocess the image
-        original_image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        # Read and preprocess
+        original_image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
         if original_image is None:
             print(f"  Error: Could not load image")
             continue
@@ -474,7 +383,7 @@ def run_inference_20_images():
         # Create output directory for this image
         img_name = Path(image_path).stem
         output_dir = MULTI_IMAGE_DIR / f"image_{idx+1:02d}_{img_name}"
-        output_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
         
         # Save comparison
         save_comparison(
@@ -484,41 +393,16 @@ def run_inference_20_images():
             epoch=40
         )
         
-        # Save just the segmentation mask
+        # Save segmentation mask
         cv2.imwrite(str(output_dir / "segmentation_mask.png"), (output_binary * 255).astype(np.uint8))
         
-        # Save the original image as well
+        # Save original image
         cv2.imwrite(str(output_dir / "original_image.png"), cv2.cvtColor(original_image, cv2.COLOR_RGB2BGR))
         
         print(f"  Results saved to: {output_dir}")
 
-
-def save_config_info():
-    """Save configuration info to JSON"""
-    config_info = {
-        "normalization": NORM_CONFIG,
-        "model": "MM_Net",
-        "epochs_tested": {
-            "single_image": [10, 20, 30, 40],
-            "multi_images": 40
-        },
-        "num_images_single": 1,
-        "num_images_multi": 20,
-        "output_directories": {
-            "single_image": str(SINGLE_IMAGE_DIR),
-            "multi_images": str(MULTI_IMAGE_DIR)
-        }
-    }
-    
-    config_path = OUTPUT_BASE / "config_info.json"
-    with open(config_path, 'w') as f:
-        json.dump(config_info, f, indent=2)
-    
-    print(f"\nConfiguration saved to: {config_path}")
-
-
 if __name__ == "__main__":
-    print("MM-UNet Inference Test Script")
+    print("MM-UNet Inference Test Script - APTOS 2019")
     print(f"Device: {device}")
     print(f"Output base directory: {OUTPUT_BASE}")
     
@@ -526,21 +410,15 @@ if __name__ == "__main__":
         # Test single image with multiple epochs
         run_inference_single_image()
         
-        # Test 20 images with epoch 40
-        run_inference_20_images()
-        
-        # Save configuration info
-        save_config_info()
+        # Test 21 images with epoch 40
+        run_inference_21_images()
         
         print("\n" + "="*80)
-        print("INFERENCE TESTING COMPLETED SUCCESSFULLY")
+        print("✓ Testing Complete!")
+        print(f"Results saved to: {OUTPUT_BASE}")
         print("="*80)
-        print(f"\nResults saved to:")
-        print(f"  Single image (epochs 10, 20, 30, 40): {SINGLE_IMAGE_DIR}")
-        print(f"  20 images (epoch 40): {MULTI_IMAGE_DIR}")
         
     except Exception as e:
         print(f"\nError during inference: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)

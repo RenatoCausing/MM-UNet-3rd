@@ -54,6 +54,26 @@ import cv2
 import numpy as np
 from pathlib import Path
 import sys
+from glob import glob
+
+def find_mask_for_image(img_path, raw_path):
+    """Try to find corresponding mask for an image"""
+    img_stem = Path(img_path).stem
+    
+    # Common mask naming conventions
+    mask_patterns = [
+        str(raw_path / f"{img_stem}*.png"),
+        str(raw_path / f"{img_stem}*.jpg"),
+        str(raw_path / f"{img_stem}_manual1.png"),
+        str(raw_path / f"{img_stem}_mask.png"),
+    ]
+    
+    for pattern in mask_patterns:
+        matches = glob(pattern)
+        if matches:
+            return matches[0]
+    
+    return None
 
 def preprocess_fives(raw_dir, output_dir, num_images=21):
     """
@@ -90,7 +110,7 @@ def preprocess_fives(raw_dir, output_dir, num_images=21):
     print(f"Found {len(image_files)} total images")
     print(f"Processing first {num_images} images...\n")
     
-    # Try to pair images with masks
+    # Process images
     processed = 0
     
     for img_path in image_files[:num_images]:
@@ -112,12 +132,31 @@ def preprocess_fives(raw_dir, output_dir, num_images=21):
             original_path = original_dir / filename
             cv2.imwrite(str(original_path), img_resized)
             
-            # Create dummy mask (all black) - replace with actual mask if available
-            mask = np.zeros((1024, 1024, 3), dtype=np.uint8)
+            # Try to find and load mask
+            mask_path = find_mask_for_image(img_path, raw_path)
+            
+            if mask_path and os.path.exists(mask_path):
+                mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                if mask is not None:
+                    # Resize mask to match
+                    mask = cv2.resize(mask, (1024, 1024))
+                    # Convert to 3-channel if needed
+                    if len(mask.shape) == 2:
+                        mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+            else:
+                # Create dummy mask (all black) as fallback
+                mask = np.zeros((1024, 1024, 3), dtype=np.uint8)
+            
             segmented_path = segmented_dir / filename
             cv2.imwrite(str(segmented_path), mask)
             
-            print(f"[{processed+1:2d}/{num_images}] ✓ {filename}")
+            status = "✓"
+            if mask_path:
+                status += " (with mask)"
+            else:
+                status += " (dummy mask)"
+            
+            print(f"[{processed+1:2d}/{num_images}] {status} {filename}")
             processed += 1
             
         except Exception as e:
