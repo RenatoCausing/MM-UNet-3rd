@@ -17,7 +17,6 @@ import yaml
 import numpy as np
 from accelerate import Accelerator
 from easydict import EasyDict
-from monai.utils import ensure_tuple_rep
 from sklearn.metrics import roc_auc_score
 import warnings
 from huggingface_hub import hf_hub_download
@@ -105,6 +104,26 @@ def build_fives_test_loader_with_fixed_split(
     Build deterministic 95/5 split with seed. Reuse split_file if present.
     This keeps preprocessing on-the-fly without writing precomputed tensors.
     """
+    # Resolve data_root to absolute path
+    data_root = os.path.abspath(data_root)
+    
+    # Verify dataset folders exist
+    original_folder = os.path.join(data_root, 'Original')
+    segmented_folder = os.path.join(data_root, 'Segmented')
+    
+    if not os.path.isdir(original_folder):
+        raise ValueError(
+            f"Original folder not found: {original_folder}\n"
+            f"Expected structure:\n"
+            f"  {data_root}/\n"
+            f"  ├── Original/\n"
+            f"  └── Segmented/\n"
+            f"Run: bash setup_fives_dataset.sh"
+        )
+    
+    if not os.path.isdir(segmented_folder):
+        raise ValueError(f"Segmented folder not found: {segmented_folder}")
+    
     all_samples = generate_fives_dataset_list(data_root)
     if len(all_samples) == 0:
         raise ValueError(f"No valid samples found under {data_root}")
@@ -250,6 +269,9 @@ def test_model(
         # Get binary predictions (for other metrics)
         preds_binary = threshold_transform(probs)
         
+        # Ensure masks are on same device as predictions
+        masks = masks.to(preds_binary.device)
+        
         # Update MONAI metrics
         dice_metric(y_pred=preds_binary, y=masks)
         for metric in confusion_metrics.values():
@@ -356,13 +378,13 @@ def main():
         split_file=args.split_file,
     )
     
-    # Setup inference
-    inference = monai.inferers.SlidingWindowInferer(
-        roi_size=ensure_tuple_rep(args.image_size, 2),
-        overlap=0.5,
-        sw_device=accelerator.device,
-        device=accelerator.device
-    )
+    # Setup inference - use direct forward pass (images are already 1024x1024)
+    # No sliding window needed for this resolution
+    class DirectInference:
+        def __call__(self, images, model):
+            return model(images)
+    
+    inference = DirectInference()
     
     # Prepare model for evaluation
     model = accelerator.prepare(model)

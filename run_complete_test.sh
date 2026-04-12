@@ -49,32 +49,15 @@ echo ""
 
 # Step 2: Download FIVEs dataset
 echo "========================================================================"
-echo "[2/4] Downloading FIVEs Dataset..."
+echo "[2/4] Downloading & Verifying FIVEs Dataset..."
 echo "========================================================================"
-if [ ! -d "${DATA_ROOT}/Original" ] && [ ! -d "${DATA_ROOT}/Segmented" ]; then
-    if [ -f "./DOWNLOAD_FIVES_DATASET.sh" ]; then
-        bash ./DOWNLOAD_FIVES_DATASET.sh
-    else
-        echo "⚠ Warning: No dataset download script found"
-        echo "  Trying manual download with gdown..."
-        
-        if ! command -v gdown &> /dev/null; then
-            python3 -m pip install -q gdown || python -m pip install -q gdown
-        fi
-        
-        echo "  Downloading fives_preprocessed.zip..."
-        if gdown 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p -O fives_preprocessed.zip; then
-            echo "  Extracting..."
-            unzip -q fives_preprocessed.zip
-            rm -f fives_preprocessed.zip
-            echo "✓ Dataset extracted"
-        else
-            echo "❌ Failed to download dataset"
-            exit 1
-        fi
-    fi
+if [ -f "./setup_fives_dataset.sh" ]; then
+    DATA_ROOT="$DATA_ROOT" bash ./setup_fives_dataset.sh
 else
-    echo "✓ Dataset already present at ${DATA_ROOT}"
+    if [ ! -d "${DATA_ROOT}/Original" ] || [ ! -d "${DATA_ROOT}/Segmented" ]; then
+        echo "Error: Dataset setup script not found and dataset missing"
+        exit 1
+    fi
 fi
 echo ""
 

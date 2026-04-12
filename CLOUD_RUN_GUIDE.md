@@ -1,6 +1,8 @@
 # Quick Cloud Run Guide
 
-## Single Command (Copy & Paste)
+## Option 1: Automated (Full Pipeline)
+
+**One command that does everything:**
 
 ```bash
 cd /workspace/MM-UNet-3rd && \
@@ -8,17 +10,54 @@ export HF_TOKEN="YOUR_HF_TOKEN" && \
 bash ./run_complete_test.sh
 ```
 
-Or with all options:
+This:
+1. Installs dependencies
+2. Downloads dataset (if needed)
+3. Pulls best_model.pth from HF
+4. Runs tests
+5. Saves results
 
+---
+
+## Option 2: Manual Steps (Safer)
+
+If automated fails, do this:
+
+### Step 1: Setup Dataset
 ```bash
-cd /workspace/MM-UNet-3rd && \
-HF_TOKEN="YOUR_HF_TOKEN" \
-HF_REPO="23LebronJames23/MM-UNet" \
-HF_FILENAME="best_model.pth" \
-DATA_ROOT="./fives_preprocessed" \
-OUTPUT_DIR="./test_results_best_model" \
-GPU="0" \
-bash ./run_complete_test.sh
+cd /workspace/MM-UNet-3rd
+bash ./setup_fives_dataset.sh
+```
+
+Verify:
+```bash
+ls ./fives_preprocessed/
+```
+
+Should show: `Original/` and `Segmented/`
+
+### Step 2: Setup Dependencies
+```bash
+bash ./INSTALL_PYTHON310.sh
+```
+
+### Step 3: Run Test
+```bash
+export HF_TOKEN="YOUR_HF_TOKEN"
+python test_fives.py \
+  --hf_repo "23LebronJames23/MM-UNet" \
+  --hf_filename "best_model.pth" \
+  --data_root "./fives_preprocessed" \
+  --output_dir "./test_results_best_model" \
+  --batch_size 4 \
+  --num_workers 4 \
+  --image_size 1024 \
+  --seed 42 \
+  --test_ratio 0.05 \
+  --gpu "0" \
+  --norm_mean 0.485 0.456 0.406 \
+  --norm_std 0.229 0.224 0.225 \
+  --save_predictions
 ```
 
 ## What It Does (Step by Step)

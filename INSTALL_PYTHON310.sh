@@ -1,8 +1,8 @@
 #!/bin/bash
 # ==========================================
-# MM-UNet FIVEs Setup - AGGRESSIVE VERSION LOCKING
-# Uses CUSTOM Mamba from authors (requirements/Mamba/)
-# ALL packages installed with --no-deps to prevent upgrades
+# MM-UNet FIVEs Setup - PYTHON 3.10 + CUDA 11.8
+# Uses CUSTOM Mamba with CUDA-Optimized Extensions
+# Targets: PyTorch 2.0.0+cu118, causal-conv1d (CUDA), mamba_ssm (CUDA)
 # ==========================================
 
 # Get the directory where this script is located
@@ -10,8 +10,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "=========================================="
-echo "MM-UNet FIVEs - AGGRESSIVE INSTALL"
-echo "Target: PyTorch 2.0.0+cu118, Custom Mamba"
+echo "MM-UNet FIVEs - PYTHON 3.10 + CUDA 11.8 BUILD"
+echo "Target: PyTorch 2.0.0+cu118 with CUDA extensions"
 echo "=========================================="
 echo "Script directory: $SCRIPT_DIR"
 
@@ -115,10 +115,11 @@ echo "[5/6] Compiling CUSTOM Mamba (bimamba_type, nslices support)..."
 # We need to force building from our modified source code
 export MAMBA_FORCE_BUILD=TRUE
 
-# Force Python-only builds for local source packages to avoid CUDA 12.4 vs torch cu118 mismatch.
-export CAUSAL_CONV1D_SKIP_CUDA_BUILD=TRUE
-export MAMBA_SKIP_CUDA_BUILD=TRUE
-echo "CUDA extension builds disabled for causal-conv1d and mamba_ssm"
+# Enable CUDA 11.8 builds for causal-conv1d and mamba_ssm for optimal performance
+# These CUDA extensions are critical for inference speed with torch 2.0.0+cu118
+# Do NOT disable - we want the optimized CUDA kernels
+echo "CUDA 11.8 extension builds ENABLED for causal-conv1d and mamba_ssm"
+echo "Building with Python 3.10 + CUDA 11.8 compatibility..."
 
 # Resolve source directories (some copies use different folder naming)
 CAUSAL_DIR=""
@@ -158,22 +159,22 @@ if [ -z "$CAUSAL_DIR" ] || [ ! -d "$MAMBA_DIR" ]; then
     exit 1
 fi
 
-# Compile causal-conv1d first
-echo "Building causal-conv1d (SKIP_CUDA_BUILD=TRUE)..."
-if CAUSAL_CONV1D_SKIP_CUDA_BUILD=TRUE python -m pip install --no-build-isolation --no-deps "$CAUSAL_DIR" 2>&1; then
-    echo "✓ causal-conv1d built successfully"
+# Compile causal-conv1d first with CUDA 11.8 support
+echo "Building causal-conv1d with CUDA 11.8 extensions (Python 3.10)..."
+if python -m pip install --no-build-isolation --no-deps "$CAUSAL_DIR" 2>&1; then
+    echo "✓ causal-conv1d built successfully with CUDA support"
 else
-    echo "⚠ Warning: causal-conv1d build had issues, attempting without build isolation..."
-    CAUSAL_CONV1D_SKIP_CUDA_BUILD=TRUE python -m pip install --no-deps "$CAUSAL_DIR" 2>&1 || echo "⚠ causal-conv1d installation skipped"
+    echo "⚠ Warning: causal-conv1d CUDA build failed, attempting CPU-only fallback..."
+    CAUSAL_CONV1D_SKIP_CUDA_BUILD=TRUE python -m pip install --no-build-isolation --no-deps "$CAUSAL_DIR" 2>&1 || echo "⚠ causal-conv1d installation skipped"
 fi
 
-# Compile custom mamba - MUST force build from source
-echo "Building Mamba (MAMBA_SKIP_CUDA_BUILD=TRUE)..."
-if MAMBA_FORCE_BUILD=TRUE MAMBA_SKIP_CUDA_BUILD=TRUE python -m pip install --no-build-isolation --no-deps "$MAMBA_DIR" 2>&1; then
-    echo "✓ Mamba built successfully"
+# Compile custom mamba - MUST force build from source with CUDA 11.8
+echo "Building Mamba with CUDA 11.8 extensions (Python 3.10)..."
+if MAMBA_FORCE_BUILD=TRUE python -m pip install --no-build-isolation --no-deps "$MAMBA_DIR" 2>&1; then
+    echo "✓ Mamba built successfully with CUDA support"
 else
-    echo "⚠ Warning: Mamba build had issues, continuing anyway..."
-    MAMBA_FORCE_BUILD=TRUE MAMBA_SKIP_CUDA_BUILD=TRUE python -m pip install --no-deps "$MAMBA_DIR" 2>&1 || echo "⚠ Mamba installation skipped"
+    echo "⚠ Warning: Mamba CUDA build failed, attempting CPU-only fallback..."
+    MAMBA_FORCE_BUILD=TRUE MAMBA_SKIP_CUDA_BUILD=TRUE python -m pip install --no-build-isolation --no-deps "$MAMBA_DIR" 2>&1 || echo "⚠ Mamba installation skipped"
 fi
 
 # Final numpy lock
