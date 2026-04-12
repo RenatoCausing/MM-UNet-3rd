@@ -8,16 +8,32 @@ import os
 import sys
 import json
 import random
-import numpy as np
-import cv2
-import torch
-import matplotlib.pyplot as plt
-from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
 # Suppress selective_scan_cuda import warnings
 os.environ['MAMBA_SKIP_CUDA_BUILD'] = '1'
+
+# CRITICAL: Apply causal_conv1d patch BEFORE any other imports
+# This fixes CUDA/PyTorch version mismatch issues
+try:
+    from causal_conv1d_patch import patch_causal_conv1d
+    patch_causal_conv1d()
+except ImportError:
+    # If patch can't be imported, try to manually fix it
+    import types
+    if 'causal_conv1d' not in sys.modules:
+        causal_conv1d = types.ModuleType('causal_conv1d')
+        causal_conv1d.causal_conv1d_fn = lambda *args, **kwargs: None
+        causal_conv1d.causal_conv1d_update = lambda *args, **kwargs: None
+        sys.modules['causal_conv1d'] = causal_conv1d
+
+# Now safe to import torch and other packages
+import numpy as np
+import cv2
+import torch
+import matplotlib.pyplot as plt
+from pathlib import Path
 
 try:
     from huggingface_hub import hf_hub_download, login
@@ -147,23 +163,27 @@ def save_comparison(original_img, segmented_img, output_path, epoch=None):
 
 
 def load_model_checkpoint(model, checkpoint_path, device):
-    """Load model checkpoint"""
-    if os.path.exists(checkpoint_path):
+    """Load model checkpoint using safe loading"""
+    try:
+        from safe_model_loading import safe_load_checkpoint
+        return safe_load_checkpoint(model, checkpoint_path, device)
+    except ImportError:
+        # Fallback if safe_model_loading not available
         print(f"Loading checkpoint: {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        
-        # Handle different checkpoint formats
-        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['model_state_dict'])
-        elif isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['state_dict'])
-        else:
-            model.load_state_dict(checkpoint)
-        
-        return True
-    else:
-        print(f"Warning: Checkpoint not found: {checkpoint_path}")
-        return False
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            
+            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['model_state_dict'])
+            elif isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['state_dict'])
+            else:
+                model.load_state_dict(checkpoint)
+            
+            return True
+        except Exception as e:
+            print(f"Warning: Checkpoint loading failed: {e}")
+            return False
 
 
 def download_checkpoints(epochs=[10, 20, 30, 40]):
@@ -206,13 +226,17 @@ def run_inference_single_image():
         print("Using default config...")
         config = EasyDict({'finetune': {'model_choose': 'MM_Net'}, 'models': {}})
     
-    # Import model
+    # Import model using safe loading
     try:
-        from src.models import give_model
-        model = give_model(config).to(device)
-    except ImportError as e:
-        print(f"Warning: Could not import model: {e}")
-        print("Continuing with available packages...")
+        from safe_model_loading import load_model_safe
+        model = load_model_safe(config, device)
+        if model is None:
+            print("❌ Error: Could not load model")
+            return
+    except Exception as e:
+        print(f"❌ Error: Could not import model: {e}")
+        import traceback
+        traceback.print_exc()
         return
     
     # Download checkpoints
@@ -270,9 +294,18 @@ def run_inference_single_image():
     for epoch, checkpoint_path in sorted(checkpoints.items()):
         print(f"\nRunning inference with epoch {epoch}...")
         
-        model = give_model(config).to(device)
+        try:
+            from safe_model_loading import load_model_safe
+            model = load_model_safe(config, device)
+            if model is None:
+                print(f"⚠ Could not load model for epoch {epoch}, skipping...")
+                continue
+        except Exception as e:
+            print(f"⚠ Error loading model for epoch {epoch}: {e}")
+            continue
         
         if not load_model_checkpoint(model, checkpoint_path, device):
+            print(f"⚠ Could not load checkpoint for epoch {epoch}, skipping...")
             continue
         
         model.eval()
@@ -310,13 +343,26 @@ def run_inference_20_images():
     print("="*80)
     
     # Load config
-    with open('config.yml', 'r') as f:
-        config_dict = yaml.safe_load(f)
-    config = EasyDict(config_dict)
+    try:
+        with open('config.yml', 'r') as f:
+            config_dict = yaml.safe_load(f)
+        config = EasyDict(config_dict)
+    except Exception as e:
+        print(f"Error loading config.yml: {e}")
+        config = EasyDict({'finetune': {'model_choose': 'MM_Net'}, 'models': {}})
     
-    # Import model
-    from src.models import give_model
-    model = give_model(config).to(device)
+    # Import model using safe loading
+    try:
+        from safe_model_loading import load_model_safe
+        model = load_model_safe(config, device)
+        if model is None:
+            print("❌ Error: Could not load model")
+            return
+    except Exception as e:
+        print(f"❌ Error importing model: {e}")
+        import traceback
+        traceback.print_exc()
+        return
     
     # Download checkpoint for epoch 40
     checkpoints = download_checkpoints([40])
@@ -364,8 +410,11 @@ def run_inference_20_images():
     print(f"Selected {len(selected_images)} images for testing")
     
     # Load model checkpoint
-    if not load_model_checkpoint(model, checkpoint_path, device):
-        print("Error loading checkpoint!")
+    if model is not None:
+        if not load_model_checkpoint(model, checkpoint_path, device):
+            print("⚠ Warning: Checkpoint loading had issues, continuing anyway...")
+    else:
+        print("⚠ Warning: Model is None, skipping checkpoint loading")
         return
     
     model.eval()

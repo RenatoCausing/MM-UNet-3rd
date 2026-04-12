@@ -202,6 +202,13 @@ if [ $TEST_SUCCESS -eq 1 ]; then
     echo ""
     echo "Configuration info saved to:"
     echo "  - ./inference_results/config_info.json"
+    echo ""
+    echo "Note: If FIVEs dataset wasn't downloaded, synthetic test images"
+    echo "were used for demonstration. Place real images in these directories"
+    echo "to use actual test data:"
+    echo "  - ./fives_preprocessed/test"
+    echo "  - ./data/test"
+    echo "  - ./test_images"
 else
     echo "⚠ Tests completed with warnings (see details above)"
 fi

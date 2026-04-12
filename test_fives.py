@@ -8,6 +8,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import argparse
 import json
+import random
 from typing import Dict
 
 import monai
@@ -19,17 +20,26 @@ from easydict import EasyDict
 from monai.utils import ensure_tuple_rep
 from sklearn.metrics import roc_auc_score
 import warnings
+from huggingface_hub import hf_hub_download
 
 from src.models import give_model
-from src.FIVEsLoader import get_fives_dataloader, FIVEsDataset, generate_fives_dataset_list
+from src.FIVEsLoader import FIVEsDataset, generate_fives_dataset_list
 
 warnings.filterwarnings('ignore')
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Test MM-UNet on FIVEs dataset')
-    parser.add_argument('--checkpoint', type=str, required=True,
-                        help='Path to model checkpoint (.pth file)')
+    parser.add_argument('--checkpoint', type=str, default='',
+                        help='Path to local model checkpoint (.pth file)')
+    parser.add_argument('--hf_repo', type=str, default='',
+                        help='Hugging Face repo id to pull checkpoint from (e.g. user/repo)')
+    parser.add_argument('--hf_filename', type=str, default='best_model.pth',
+                        help='Checkpoint filename in Hugging Face repo')
+    parser.add_argument('--hf_token', type=str, default='',
+                        help='Hugging Face token (or set HF_TOKEN env var)')
+    parser.add_argument('--hf_cache_dir', type=str, default='./hf_cache',
+                        help='Cache directory for Hugging Face downloads')
     parser.add_argument('--data_root', type=str, default='./fives_preprocessed',
                         help='Path to FIVEs dataset')
     parser.add_argument('--batch_size', type=int, default=4,
@@ -38,12 +48,16 @@ def parse_args():
                         help='Image size (default 1024 for FIVEs)')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of data loading workers')
-    parser.add_argument('--stats_file', type=str, default=None,
-                        help='Path to data_stats.json for normalization params')
     parser.add_argument('--test_ratio', type=float, default=0.05,
                         help='Test set ratio (default 0.05 = 5%)')
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed (must match training seed for same split)')
+    parser.add_argument('--split_file', type=str, default='./test_results/fives_split_seed42_ratio005.json',
+                        help='Split manifest file. If exists, reuse exact split; otherwise create it.')
+    parser.add_argument('--norm_mean', type=float, nargs=3, default=[0.485, 0.456, 0.406],
+                        help='Normalization mean as 3 floats')
+    parser.add_argument('--norm_std', type=float, nargs=3, default=[0.229, 0.224, 0.225],
+                        help='Normalization std as 3 floats')
     parser.add_argument('--output_dir', type=str, default='./test_results',
                         help='Directory to save test results')
     parser.add_argument('--gpu', type=str, default='0',
@@ -51,6 +65,109 @@ def parse_args():
     parser.add_argument('--save_predictions', action='store_true',
                         help='Save prediction images')
     return parser.parse_args()
+
+
+def resolve_checkpoint(args, accelerator):
+    """Resolve checkpoint path from local file or Hugging Face."""
+    if args.checkpoint and os.path.exists(args.checkpoint):
+        return args.checkpoint
+
+    if not args.hf_repo:
+        raise ValueError(
+            "Checkpoint not found locally and --hf_repo is empty. "
+            "Provide --checkpoint or --hf_repo."
+        )
+
+    token = args.hf_token or os.environ.get('HF_TOKEN', '')
+    accelerator.print(f"Downloading checkpoint from Hugging Face: {args.hf_repo}/{args.hf_filename}")
+    ckpt_path = hf_hub_download(
+        repo_id=args.hf_repo,
+        filename=args.hf_filename,
+        token=token if token else None,
+        cache_dir=args.hf_cache_dir,
+    )
+    accelerator.print(f"Checkpoint downloaded to: {ckpt_path}")
+    return ckpt_path
+
+
+def build_fives_test_loader_with_fixed_split(
+    data_root: str,
+    image_size: int,
+    batch_size: int,
+    num_workers: int,
+    test_ratio: float,
+    seed: int,
+    norm_mean,
+    norm_std,
+    split_file: str,
+):
+    """
+    Build deterministic 95/5 split with seed. Reuse split_file if present.
+    This keeps preprocessing on-the-fly without writing precomputed tensors.
+    """
+    all_samples = generate_fives_dataset_list(data_root)
+    if len(all_samples) == 0:
+        raise ValueError(f"No valid samples found under {data_root}")
+
+    os.makedirs(os.path.dirname(split_file) or '.', exist_ok=True)
+
+    if os.path.exists(split_file):
+        with open(split_file, 'r', encoding='utf-8') as f:
+            split_data = json.load(f)
+        test_samples = split_data.get('test_samples', [])
+        train_samples = split_data.get('train_samples', [])
+    else:
+        rng = random.Random(seed)
+        shuffled = list(all_samples)
+        rng.shuffle(shuffled)
+        n_test = max(1, int(len(shuffled) * test_ratio))
+        test_samples = shuffled[:n_test]
+        train_samples = shuffled[n_test:]
+
+        with open(split_file, 'w', encoding='utf-8') as f:
+            json.dump(
+                {
+                    'seed': seed,
+                    'test_ratio': test_ratio,
+                    'n_total': len(shuffled),
+                    'n_train': len(train_samples),
+                    'n_test': len(test_samples),
+                    'train_samples': train_samples,
+                    'test_samples': test_samples,
+                },
+                f,
+                indent=2,
+            )
+
+    test_dataset = FIVEsDataset(
+        samples=test_samples,
+        mode='test',
+        image_size=image_size,
+        image_mean=list(norm_mean),
+        image_std=list(norm_std),
+    )
+
+    test_loader = torch.utils.data.DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=False,
+    )
+
+    data_stats = {
+        'n_train': len(train_samples),
+        'n_test': len(test_samples),
+        'train_mean': list(norm_mean),
+        'train_std': list(norm_std),
+        'test_mean': list(norm_mean),
+        'test_std': list(norm_std),
+        'image_size': image_size,
+        'split_file': split_file,
+    }
+
+    return test_loader, data_stats
 
 
 def compute_auc(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -196,10 +313,14 @@ def main():
     accelerator.print("=" * 60)
     accelerator.print("FIVEs Dataset Testing")
     accelerator.print("=" * 60)
-    accelerator.print(f"Checkpoint: {args.checkpoint}")
+    accelerator.print(f"Checkpoint (local): {args.checkpoint if args.checkpoint else 'N/A'}")
+    accelerator.print(f"Checkpoint (HF): {args.hf_repo}/{args.hf_filename}" if args.hf_repo else "Checkpoint (HF): N/A")
     accelerator.print(f"Data Root: {args.data_root}")
     accelerator.print(f"Image Size: {args.image_size}")
     accelerator.print(f"Batch Size: {args.batch_size}")
+    accelerator.print(f"Split Ratio: {1-args.test_ratio:.2f}/{args.test_ratio:.2f}, Seed: {args.seed}")
+    accelerator.print(f"Norm Mean: {args.norm_mean}")
+    accelerator.print(f"Norm Std: {args.norm_std}")
     accelerator.print("=" * 60)
     
     # Create output directory
@@ -210,8 +331,9 @@ def main():
     model = give_model(config)
     
     # Load checkpoint
-    accelerator.print(f'Loading checkpoint from {args.checkpoint}...')
-    checkpoint = torch.load(args.checkpoint, map_location='cpu')
+    checkpoint_path = resolve_checkpoint(args, accelerator)
+    accelerator.print(f'Loading checkpoint from {checkpoint_path}...')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu')
     
     if 'model_state_dict' in checkpoint:
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -220,31 +342,18 @@ def main():
         # Try loading as direct state dict
         model.load_state_dict(checkpoint)
     
-    # Load normalization stats if available
-    test_mean = None
-    test_std = None
-    
-    if args.stats_file and os.path.exists(args.stats_file):
-        with open(args.stats_file, 'r') as f:
-            stats = json.load(f)
-        test_mean = stats.get('test_mean')
-        test_std = stats.get('test_std')
-        accelerator.print(f"Loaded normalization stats from {args.stats_file}")
-        accelerator.print(f"  Test Mean: {test_mean}")
-        accelerator.print(f"  Test Std: {test_std}")
-    
     # Load test data
     accelerator.print('Loading Test Dataset...')
-    
-    # Use the same split as training (with same seed)
-    train_loader, test_loader, data_stats = get_fives_dataloader(
+    test_loader, data_stats = build_fives_test_loader_with_fixed_split(
         data_root=args.data_root,
+        image_size=args.image_size,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
-        image_size=args.image_size,
         test_ratio=args.test_ratio,
-        random_seed=args.seed,
-        compute_norm_stats=True,  # Compute stats for test set
+        seed=args.seed,
+        norm_mean=args.norm_mean,
+        norm_std=args.norm_std,
+        split_file=args.split_file,
     )
     
     # Setup inference
@@ -288,10 +397,15 @@ def main():
     
     # Save results to JSON
     results_path = os.path.join(args.output_dir, 'test_results.json')
-    results['checkpoint'] = args.checkpoint
+    results['checkpoint'] = checkpoint_path
     results['data_root'] = args.data_root
     results['n_test_samples'] = data_stats['n_test']
     results['image_size'] = args.image_size
+    results['split_file'] = data_stats['split_file']
+    results['seed'] = args.seed
+    results['test_ratio'] = args.test_ratio
+    results['norm_mean'] = args.norm_mean
+    results['norm_std'] = args.norm_std
     
     with open(results_path, 'w') as f:
         json.dump(results, f, indent=2)

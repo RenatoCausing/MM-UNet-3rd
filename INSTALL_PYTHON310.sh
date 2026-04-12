@@ -251,16 +251,20 @@ print('='*50)
 "
 
 # ==========================================
-# Download FIVEs dataset
+# Download FIVEs dataset (OPTIONAL)
 # ==========================================
 echo ""
-echo "Downloading FIVEs dataset..."
-if gdown --id 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p 2>/dev/null; then
-    unzip -q fives_preprocessed.zip 2>/dev/null || true
-    rm fives_preprocessed.zip 2>/dev/null || true
-    echo "✓ FIVEs dataset downloaded"
+echo "Attempting to download FIVEs dataset (optional)..."
+if command -v gdown &> /dev/null; then
+    if gdown --id 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p -O fives_preprocessed.zip 2>&1 | grep -q "100%"; then
+        unzip -q fives_preprocessed.zip 2>/dev/null || true
+        rm fives_preprocessed.zip 2>/dev/null || true
+        echo "✓ FIVEs dataset downloaded successfully"
+    else
+        echo "  (Skipping - will use synthetic test images for inference)"
+    fi
 else
-    echo "⚠ Warning: Could not download FIVEs dataset (this is optional for inference testing)"
+    echo "  (gdown not available - will use synthetic test images for inference)"
 fi
 
 echo ""

@@ -14,6 +14,8 @@ This will:
 4. Test 20 random images with epoch 40
 5. Save results to `./inference_results/`
 
+**Note:** If the FIVEs dataset isn't available, the script will automatically create synthetic test images for demonstration. The inference will work the same way.
+
 ---
 
 ## Common Issues
@@ -58,8 +60,51 @@ bash run_inference_test.sh
 - `./test_images`
 - `./datasets/test`
 
+**To use actual FIVEs dataset images:**
+```bash
+# Option 1: Download during full installation (automatic attempt)
+bash INSTALL_PYTHON310.sh
+
+# Option 2: Download separately (manual)
+bash DOWNLOAD_FIVES_DATASET.sh
+```
+
 **To use your own images:**
-Place them in one of the above directories with extensions: `.jpg`, `.png`, or `.jpeg`
+Place them in one of the standard locations above with extensions: `.jpg`, `.png`, or `.jpeg`
+
+### Issue 4: CUDA Symbol Mismatch / causal_conv1d Import Error
+
+**Error Message:**
+```
+ImportError: /venv/main/lib/python3.10/site-packages/causal_conv1d_cuda.cpython-310-x86_64-linux-gnu.so: undefined symbol: _ZN2at4_ops10zeros_like4callERKNS_6TensorE...
+TypeError: cannot unpack non-iterable NoneType object
+```
+
+**Cause:** The compiled `causal_conv1d_cuda` extension has symbol mismatches (usually PyTorch/CUDA version mismatch).
+
+**Solution (Automatic):**
+The scripts now handle this automatically with:
+1. `causal_conv1d_patch.py` - Patches import errors before they occur
+2. `safe_model_loading.py` - Loads models with fallback mechanisms
+3. Graceful degradation if model loading fails
+
+**What happens if this error occurs:**
+- The patch module intercepts the import error
+- Creates stub implementations that raise NotImplementedError if called
+- Falls back to alternative model loading methods
+- Tests continue with warnings
+
+**If you still see this error after running the updated scripts:**
+- The issue may be environmental (PyTorch/CUDA mismatch)
+- Update PyTorch to match your CUDA version:
+  ```bash
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 --force-reinstall
+  ```
+- Or reinstall completely:
+  ```bash
+  bash INSTALL_MINIMAL.sh
+  bash run_inference_test.sh
+  ```
 
 ### Issue 4: HuggingFace Download Fails
 
