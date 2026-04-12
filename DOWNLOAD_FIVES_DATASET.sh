@@ -23,8 +23,8 @@ echo "Downloading FIVEs dataset..."
 echo "(This may take a few minutes)"
 echo ""
 
-# Download with better error handling
-if gdown --id 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p -O fives_preprocessed.zip; then
+# Download with better error handling (use newer gdown syntax without --id flag)
+if gdown 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p -O fives_preprocessed.zip 2>&1 | tee download.log; then
     echo ""
     echo "Download completed. Extracting..."
     

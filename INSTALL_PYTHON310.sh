@@ -256,7 +256,7 @@ print('='*50)
 echo ""
 echo "Attempting to download FIVEs dataset (optional)..."
 if command -v gdown &> /dev/null; then
-    if gdown --id 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p -O fives_preprocessed.zip 2>&1 | grep -q "100%"; then
+    if gdown 1VTFhKLxdzQAZv3Jj4mZgixI70RzfF68p -O fives_preprocessed.zip 2>&1 | tee download.log | grep -qi "100\|downloaded"; then
         unzip -q fives_preprocessed.zip 2>/dev/null || true
         rm fives_preprocessed.zip 2>/dev/null || true
         echo "✓ FIVEs dataset downloaded successfully"
